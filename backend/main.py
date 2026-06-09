@@ -175,12 +175,55 @@ async def emsx_schema():
         except Exception as exc:
             probe_results[name] = f"NOT FOUND: {exc}"
 
+    # Dump the full request definition tree for the order operation(s) so we can
+    # see every field, its type, and whether it is required (min >= 1).
+    request_schemas: dict[str, object] = {}
+    for op_name in ("CreateOrderAndRouteEx", "CreateOrderAndRoute"):
+        try:
+            op = svc.getOperation(op_name)
+            req_def = op.requestDefinition()
+            request_schemas[op_name] = _dump_element_def(req_def)
+        except Exception as exc:
+            request_schemas[op_name] = f"ERROR: {exc}"
+
     return {
         "service": EMSX_SERVICE,
         "schema_operations": sorted(schema_ops),
         "schema_error": schema_error,
         "candidate_probe": probe_results,
+        "request_schemas": request_schemas,
     }
+
+
+def _dump_element_def(elem_def, depth: int = 0, max_depth: int = 6) -> dict:
+    """Recursively describe a blpapi SchemaElementDefinition: name, type, cardinality, children."""
+    type_def = elem_def.typeDefinition()
+    try:
+        min_v = elem_def.minValues()
+        max_v = elem_def.maxValues()
+    except Exception:
+        min_v, max_v = None, None
+
+    node: dict = {
+        "name": str(elem_def.name()),
+        "type": str(type_def.name()),
+        "min": min_v,
+        "max": max_v,
+        "required": (min_v is not None and min_v >= 1),
+    }
+
+    if depth < max_depth:
+        try:
+            num = type_def.numElementDefinitions()
+            if num > 0:
+                node["children"] = [
+                    _dump_element_def(type_def.getElementDefinition(i), depth + 1, max_depth)
+                    for i in range(num)
+                ]
+        except Exception:
+            pass
+
+    return node
 
 
 @app.get("/api/settlement")

@@ -83,6 +83,11 @@ def submit_order(order: dict) -> dict:
         "Submitting EMSX order: %s %s %d lots via %s",
         order["bs"], order["ticker"], order["lots"], EMSX_BROKER,
     )
+    # Dump the fully-built request so encode failures can be diagnosed
+    try:
+        log.info("EMSX request structure:\n%s", req)
+    except Exception:
+        log.warning("Could not stringify EMSX request for logging")
 
     msg = bbg.send_request_sync(req, timeout=30)
     return _parse_submit_response(msg, order["orderId"])
