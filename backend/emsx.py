@@ -82,8 +82,15 @@ def _set_strategy(req: blpapi.Request, name: str) -> None:
     """
     strat = req.getElement("EMSX_STRATEGY_PARAMS")
     strat.setElement("EMSX_STRATEGY_NAME", name)
-    # EMSX_STRATEGY_FIELD_INDICATORS and EMSX_STRATEGY_FIELDS intentionally left
-    # empty — strategy "NONE" defines no fields.
+
+    # The schema requires BOTH arrays to have min=1 once EMSX_STRATEGY_PARAMS is
+    # present. For a no-field strategy ("NONE") we send a single placeholder
+    # field flagged to be ignored: EMSX_FIELD_DATA = "" with
+    # EMSX_FIELD_INDICATOR = 1 (1 = ignore this field, 0 = use its value).
+    fields     = strat.getElement("EMSX_STRATEGY_FIELDS")
+    indicators = strat.getElement("EMSX_STRATEGY_FIELD_INDICATORS")
+    fields.appendElement().setElement("EMSX_FIELD_DATA", "")
+    indicators.appendElement().setElement("EMSX_FIELD_INDICATOR", 1)
 
 
 def submit_order(order: dict) -> dict:
