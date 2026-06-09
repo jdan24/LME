@@ -1,6 +1,8 @@
 import type { Order, FillStatus, SettlementPrice, AppConfig } from '../types'
 
-const BASE = '/api'
+// In dev (`npm run dev`) the Vite proxy forwards /api → localhost:8000.
+// In production (built index.html opened as a file) we need the absolute URL.
+const BASE = import.meta.env.DEV ? '/api' : 'http://localhost:8000/api'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {

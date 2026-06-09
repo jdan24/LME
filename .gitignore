@@ -1,3 +1,7 @@
+# Vite public-dir files copied to project root during build (not needed alongside single-file bundle)
+favicon.svg
+icons.svg
+
 node_modules/
 frontend/node_modules/
 frontend/dist/

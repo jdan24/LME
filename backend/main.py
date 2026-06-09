@@ -45,7 +45,9 @@ app = FastAPI(title="LME Order Entry", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:4173"],
+    # "null" is the Origin sent by browsers when opening a file:// page.
+    # localhost origins are kept for `npm run dev` during development.
+    allow_origins=["null", "http://localhost:5173", "http://localhost:4173"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
