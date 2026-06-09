@@ -66,8 +66,10 @@ def _parse_submit_response(msg: blpapi.Message, order_id: str) -> dict:
     msg_type = str(msg.messageType())
     log.info("EMSX response type: %s", msg_type)
 
-    if msg_type in ("Error", "ErrorResponse", "Failure"):
-        raise RuntimeError(f"EMSX rejected order {order_id}: {_extract_error(msg)}")
+    ERROR_TYPES = ("Error", "ErrorResponse", "Failure", "ErrorInfo")
+    if msg_type in ERROR_TYPES:
+        reason = _extract_error(msg)
+        raise RuntimeError(f"EMSX rejected order {order_id} [{msg_type}]: {reason}")
 
     try:
         emsx_seq = msg.getElementAsInteger("EMSX_SEQUENCE")
@@ -77,7 +79,7 @@ def _parse_submit_response(msg: blpapi.Message, order_id: str) -> dict:
         except Exception:
             raise RuntimeError(
                 f"Could not extract EMSX_SEQUENCE from response for order {order_id}. "
-                f"Response type was: {msg_type}"
+                f"Response type was: {msg_type}. Full message: {msg}"
             )
 
     status = msg.getElementAsString("EMSX_STATUS") if msg.hasElement("EMSX_STATUS") else ""
@@ -86,10 +88,15 @@ def _parse_submit_response(msg: blpapi.Message, order_id: str) -> dict:
 
 
 def _extract_error(msg: blpapi.Message) -> str:
-    try:
-        return msg.getElementAsString("MESSAGE")
-    except Exception:
-        return str(msg)
+    # Bloomberg ErrorInfo messages use several possible field names for the reason
+    for field in ("DESCRIPTION", "MESSAGE", "ERROR_MESSAGE", "REASON", "CATEGORY", "SUB_CATEGORY"):
+        try:
+            val = msg.getElementAsString(field)
+            if val:
+                return f"{field}={val}"
+        except Exception:
+            pass
+    return str(msg)
 
 
 def get_fill_status(sequences: list[int]) -> list[dict]:
