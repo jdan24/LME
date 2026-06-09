@@ -140,11 +140,13 @@ class BloombergManager:
             seq = msg.getElementAsInteger("EMSX_SEQUENCE")
             if seq == 0:
                 return  # Bloomberg sometimes sends seq=0 for dummy/initial messages
-            status   = msg.getElementAsString("EMSX_STATUS")  if msg.hasElement("EMSX_STATUS")  else ""
-            filled   = msg.getElementAsInteger("EMSX_FILLED") if msg.hasElement("EMSX_FILLED") else 0
-            amount   = msg.getElementAsInteger("EMSX_AMOUNT") if msg.hasElement("EMSX_AMOUNT") else 0
-            ticker   = msg.getElementAsString("EMSX_TICKER")  if msg.hasElement("EMSX_TICKER")  else ""
-            side_int = msg.getElementAsInteger("EMSX_SIDE")   if msg.hasElement("EMSX_SIDE")   else 1
+            status = msg.getElementAsString("EMSX_STATUS")  if msg.hasElement("EMSX_STATUS")  else ""
+            filled = msg.getElementAsInteger("EMSX_FILLED") if msg.hasElement("EMSX_FILLED") else 0
+            amount = msg.getElementAsInteger("EMSX_AMOUNT") if msg.hasElement("EMSX_AMOUNT") else 0
+            ticker = msg.getElementAsString("EMSX_TICKER")  if msg.hasElement("EMSX_TICKER")  else ""
+            # Subscription messages send EMSX_SIDE as a string ("BUY"/"SELL"), not an integer
+            side_raw = msg.getElementAsString("EMSX_SIDE") if msg.hasElement("EMSX_SIDE") else "BUY"
+            bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
             with self._order_lock:
                 self._order_cache[seq] = {
@@ -153,7 +155,7 @@ class BloombergManager:
                     "filledAmount": filled,
                     "lots": amount,
                     "ticker": ticker,
-                    "bs": "BUY" if side_int == 1 else "SELL",
+                    "bs": bs,
                 }
         except Exception:
             log.exception("Failed to parse EMSX update message")
