@@ -1,4 +1,4 @@
-import type { Order, FillStatus, SettlementPrice } from '../types'
+import type { Order, FillStatus, SettlementPrice, AppConfig } from '../types'
 
 const BASE = '/api'
 
@@ -16,6 +16,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 export async function checkHealth(): Promise<{ status: string; bloomberg: string }> {
   return request('/health')
+}
+
+export async function getConfig(): Promise<AppConfig> {
+  return request('/config')
 }
 
 export async function submitOrders(orders: Order[]): Promise<{ results: Array<{ emsxSequence: number; status: string; orderId: string }> }> {

@@ -1,11 +1,11 @@
-import { useState, useCallback } from 'react'
-import type { Order, AppState } from './types'
+import { useState, useCallback, useEffect } from 'react'
+import type { Order, AppState, AppConfig } from './types'
 import { PasteArea } from './components/PasteArea'
 import { OrderTable } from './components/OrderTable'
 import { SubmitControls } from './components/SubmitControls'
 import { FillStatus } from './components/FillStatus'
 import { SettlementPanel } from './components/SettlementPanel'
-import { submitOrders } from './api/client'
+import { submitOrders, getConfig } from './api/client'
 
 interface SubmittedOrder {
   emsxSequence: number
@@ -22,6 +22,15 @@ export default function App() {
   const [submitted, setSubmitted] = useState<SubmittedOrder[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [config, setConfig] = useState<AppConfig | null>(null)
+
+  useEffect(() => {
+    getConfig()
+      .then(setConfig)
+      .catch(() => {
+        // Backend not reachable yet — show placeholder; will retry on next action
+      })
+  }, [])
 
   const handleParsed = useCallback((parsed: Order[], errors: string[]) => {
     if (parsed.length === 0 && errors.length === 0) return
@@ -86,7 +95,7 @@ export default function App() {
             </div>
           </div>
 
-          <OrderTable orders={orders} errors={parseErrors} />
+          <OrderTable orders={orders} errors={parseErrors} config={config} />
 
           {submitError && (
             <div className="bg-red-900/40 border border-red-700 rounded-lg p-3 text-red-300 text-sm">
@@ -96,6 +105,7 @@ export default function App() {
 
           <SubmitControls
             orders={orders}
+            config={config}
             onSubmit={handleSubmit}
             onReset={handleReset}
             submitting={submitting}

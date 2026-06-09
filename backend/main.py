@@ -20,6 +20,7 @@ from pydantic import BaseModel
 from bloomberg import bbg
 from emsx import submit_order, get_fill_status
 from refdata import get_settlement
+from config import EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE, EMSX_TIF, EMSX_HAND_INSTR
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -74,6 +75,18 @@ class SubmitRequest(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"status": "ok", "bloomberg": "connected" if bbg.connected else "disconnected"}
+
+
+@app.get("/api/config")
+async def get_config():
+    """Returns display-only order config for the frontend. Values come from .env."""
+    return {
+        "account": EMSX_ACCOUNT,
+        "broker": EMSX_BROKER,
+        "orderType": EMSX_ORDER_TYPE,
+        "tif": EMSX_TIF,
+        "handlingInstr": EMSX_HAND_INSTR,
+    }
 
 
 @app.post("/api/submit-orders")

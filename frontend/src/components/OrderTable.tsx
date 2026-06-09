@@ -1,12 +1,16 @@
-import type { Order } from '../types'
+import type { Order, AppConfig } from '../types'
 import { contractLabel } from '../utils/lmeConfig'
 
 interface Props {
   orders: Order[]
   errors: string[]
+  config: AppConfig | null
 }
 
-export function OrderTable({ orders, errors }: Props) {
+export function OrderTable({ orders, errors, config }: Props) {
+  const account = config?.account ?? '—'
+  const broker  = config?.broker  ?? '—'
+
   return (
     <div className="w-full">
       {errors.length > 0 && (
@@ -59,8 +63,8 @@ export function OrderTable({ orders, errors }: Props) {
                 <td className="px-4 py-3 text-right font-mono text-white">{o.lots.toLocaleString()}</td>
                 <td className="px-4 py-3 text-slate-400 text-xs font-mono">{o.orderId}</td>
                 <td className="px-4 py-3 text-slate-400 text-xs">MOC / DAY</td>
-                <td className="px-4 py-3 text-slate-400 text-xs">KMTF</td>
-                <td className="px-4 py-3 text-slate-400 text-xs">367A0027</td>
+                <td className="px-4 py-3 text-slate-400 text-xs font-mono">{broker}</td>
+                <td className="px-4 py-3 text-slate-400 text-xs font-mono">{account}</td>
               </tr>
             ))}
           </tbody>

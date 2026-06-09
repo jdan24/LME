@@ -1,18 +1,25 @@
 import { useState } from 'react'
-import type { Order } from '../types'
+import type { Order, AppConfig } from '../types'
 
 interface Props {
   orders: Order[]
+  config: AppConfig | null
   onSubmit: () => void
   onReset: () => void
   submitting: boolean
 }
 
-export function SubmitControls({ orders, onSubmit, onReset, submitting }: Props) {
+export function SubmitControls({ orders, config, onSubmit, onReset, submitting }: Props) {
   const [confirming, setConfirming] = useState(false)
 
-  const buys = orders.filter(o => o.bs === 'BUY')
+  const buys  = orders.filter(o => o.bs === 'BUY')
   const sells = orders.filter(o => o.bs === 'SELL')
+
+  const account      = config?.account      ?? '—'
+  const broker       = config?.broker       ?? '—'
+  const orderType    = config?.orderType    ?? 'MOC'
+  const tif          = config?.tif          ?? 'DAY'
+  const handlingInstr = config?.handlingInstr ?? 'MAN'
 
   if (confirming) {
     return (
@@ -20,16 +27,16 @@ export function SubmitControls({ orders, onSubmit, onReset, submitting }: Props)
         <h2 className="text-white text-lg font-semibold">Confirm Order Submission</h2>
         <div className="text-slate-300 text-sm space-y-1">
           <p><span className="font-mono">{orders.length}</span> order{orders.length !== 1 ? 's' : ''} will be submitted to Bloomberg EMSX</p>
-          {buys.length > 0 && <p className="text-green-400">▲ {buys.length} BUY order{buys.length !== 1 ? 's' : ''} ({buys.reduce((s, o) => s + o.lots, 0).toLocaleString()} lots)</p>}
+          {buys.length  > 0 && <p className="text-green-400">▲ {buys.length}  BUY order{buys.length  !== 1 ? 's' : ''} ({buys.reduce((s, o)  => s + o.lots, 0).toLocaleString()} lots)</p>}
           {sells.length > 0 && <p className="text-red-400">▼ {sells.length} SELL order{sells.length !== 1 ? 's' : ''} ({sells.reduce((s, o) => s + o.lots, 0).toLocaleString()} lots)</p>}
         </div>
         <div className="text-slate-500 text-xs border border-slate-700 rounded-lg p-3 text-left">
           <div className="grid grid-cols-2 gap-1">
-            <span>Broker:</span><span className="text-slate-300 font-mono">KMTF</span>
-            <span>Account:</span><span className="text-slate-300 font-mono">367A0027</span>
-            <span>Order Type:</span><span className="text-slate-300 font-mono">MOC</span>
-            <span>TIF:</span><span className="text-slate-300 font-mono">DAY</span>
-            <span>Handling:</span><span className="text-slate-300 font-mono">MAN</span>
+            <span>Broker:</span>       <span className="text-slate-300 font-mono">{broker}</span>
+            <span>Account:</span>      <span className="text-slate-300 font-mono">{account}</span>
+            <span>Order Type:</span>   <span className="text-slate-300 font-mono">{orderType}</span>
+            <span>TIF:</span>          <span className="text-slate-300 font-mono">{tif}</span>
+            <span>Handling:</span>     <span className="text-slate-300 font-mono">{handlingInstr}</span>
           </div>
         </div>
         <div className="flex gap-3 justify-center">

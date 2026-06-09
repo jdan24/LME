@@ -30,6 +30,14 @@ export interface SettlementPrice {
   freshness: 'today' | 'prior' | 'stale' | 'unavailable'
 }
 
+export interface AppConfig {
+  account: string
+  broker: string
+  orderType: string
+  tif: string
+  handlingInstr: string
+}
+
 export type AppState =
   | 'EMPTY'
   | 'PARSED'
