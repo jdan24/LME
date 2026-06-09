@@ -1,4 +1,5 @@
 import type { Order } from '../types'
+import { toEmsxTicker } from './lmeConfig'
 
 // Exact column header names as they appear in EaTrade's clipboard output
 const HEADER = {
@@ -96,7 +97,7 @@ export function parseClipboard(raw: string): { orders: Order[]; errors: string[]
 
     orders.push({
       contract,
-      ticker: `${contract} Comdty`,
+      ticker: toEmsxTicker(contract),
       bs: bs as 'BUY' | 'SELL',
       lots,
       orderId,

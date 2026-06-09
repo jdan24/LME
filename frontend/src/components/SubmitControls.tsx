@@ -59,8 +59,13 @@ export function SubmitControls({ orders, config, onSubmit, onReset, submitting }
     )
   }
 
+  const noneSelected = orders.length === 0
+
   return (
-    <div className="flex gap-3 justify-end">
+    <div className="flex items-center gap-3 justify-end">
+      {noneSelected && (
+        <span className="text-slate-500 text-sm mr-auto">Select at least one order to submit</span>
+      )}
       <button
         onClick={onReset}
         className="px-4 py-2 rounded-lg bg-slate-700 text-slate-300 hover:bg-slate-600 transition-colors text-sm"
@@ -69,7 +74,8 @@ export function SubmitControls({ orders, config, onSubmit, onReset, submitting }
       </button>
       <button
         onClick={() => setConfirming(true)}
-        className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors text-sm font-medium"
+        disabled={noneSelected}
+        className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
       >
         Submit {orders.length} Order{orders.length !== 1 ? 's' : ''} to EMSX →
       </button>

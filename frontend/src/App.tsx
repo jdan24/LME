@@ -18,6 +18,7 @@ interface SubmittedOrder {
 export default function App() {
   const [appState, setAppState] = useState<AppState>('EMPTY')
   const [orders, setOrders] = useState<Order[]>([])
+  const [selected, setSelected] = useState<boolean[]>([])
   const [parseErrors, setParseErrors] = useState<string[]>([])
   const [submitted, setSubmitted] = useState<SubmittedOrder[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -35,6 +36,8 @@ export default function App() {
   const handleParsed = useCallback((parsed: Order[], errors: string[]) => {
     if (parsed.length === 0 && errors.length === 0) return
     setOrders(parsed)
+    // All rows start UNCHECKED — the user explicitly selects which to submit
+    setSelected(new Array(parsed.length).fill(false))
     setParseErrors(errors)
     setAppState(parsed.length > 0 ? 'REVIEW' : 'EMPTY')
     setSubmitError(null)
@@ -42,24 +45,35 @@ export default function App() {
 
   const handleReset = useCallback(() => {
     setOrders([])
+    setSelected([])
     setParseErrors([])
     setSubmitted([])
     setSubmitError(null)
     setAppState('EMPTY')
   }, [])
 
+  const toggleRow = useCallback((index: number) => {
+    setSelected(prev => prev.map((v, i) => (i === index ? !v : v)))
+  }, [])
+
+  const selectAll  = useCallback(() => setSelected(prev => prev.map(() => true)),  [])
+  const selectNone = useCallback(() => setSelected(prev => prev.map(() => false)), [])
+
+  // Only checked rows are submitted
+  const selectedOrders = orders.filter((_, i) => selected[i])
+
   const handleSubmit = async () => {
     setSubmitting(true)
     setSubmitError(null)
     setAppState('SUBMITTING')
     try {
-      const { results } = await submitOrders(orders)
+      const { results } = await submitOrders(selectedOrders)
       const submittedList: SubmittedOrder[] = results.map((r, i) => ({
         emsxSequence: r.emsxSequence,
         orderId: r.orderId,
-        ticker: orders[i].ticker,
-        bs: orders[i].bs,
-        lots: orders[i].lots,
+        ticker: selectedOrders[i].ticker,
+        bs: selectedOrders[i].bs,
+        lots: selectedOrders[i].lots,
       }))
       setSubmitted(submittedList)
       setAppState('MONITORING')
@@ -71,7 +85,8 @@ export default function App() {
     }
   }
 
-  const uniqueTickers = [...new Set(orders.map(o => o.ticker))]
+  // Settlement is fetched for the tickers that were actually submitted
+  const uniqueTickers = [...new Set(submitted.map(s => s.ticker))]
 
   return (
     <div className="min-h-screen bg-slate-900">
@@ -85,7 +100,9 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-bold text-white">LME Order Entry</h1>
               <p className="text-slate-400 text-sm mt-0.5">
-                {orders.length} LME_NTP order{orders.length !== 1 ? 's' : ''} ready for submission
+                {orders.length} LME_NTP order{orders.length !== 1 ? 's' : ''} imported
+                {' · '}
+                <span className="text-blue-300">{selectedOrders.length} selected</span>
                 {parseErrors.length > 0 && ` · ${parseErrors.length} warning${parseErrors.length !== 1 ? 's' : ''}`}
               </p>
             </div>
@@ -95,7 +112,15 @@ export default function App() {
             </div>
           </div>
 
-          <OrderTable orders={orders} errors={parseErrors} config={config} />
+          <OrderTable
+            orders={orders}
+            errors={parseErrors}
+            config={config}
+            selected={selected}
+            onToggle={toggleRow}
+            onSelectAll={selectAll}
+            onSelectNone={selectNone}
+          />
 
           {submitError && (
             <div className="bg-red-900/40 border border-red-700 rounded-lg p-3 text-red-300 text-sm">
@@ -104,7 +129,7 @@ export default function App() {
           )}
 
           <SubmitControls
-            orders={orders}
+            orders={selectedOrders}
             config={config}
             onSubmit={handleSubmit}
             onReset={handleReset}

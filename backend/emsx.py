@@ -53,6 +53,7 @@ def submit_order(order: dict) -> dict:
     # Optional fields — set defensively in case the service schema differs
     _try_set(req, "EMSX_HAND_INSTRUCTION", EMSX_HAND_INSTR)  # "MAN"
     _try_set(req, "EMSX_NOTES",            order["orderId"])  # EATrade order ID
+    _try_set(req, "EMSX_STRATEGY_NAME",    "NONE")            # no algo strategy
 
     log.info(
         "Submitting EMSX order: %s %s %d lots via %s",
