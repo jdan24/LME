@@ -38,7 +38,7 @@ def submit_order(order: dict) -> dict:
     Returns: {emsxSequence, status, orderId}
     """
     svc = bbg.emsx_service
-    req = svc.createRequest("CreateOrderAndRouteRequest")
+    req = svc.createRequest("CreateOrderAndRoute")
 
     # Core required fields
     req.set("EMSX_TICKER",     order["ticker"])        # e.g. "LAH6 Comdty"

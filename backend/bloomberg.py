@@ -90,11 +90,16 @@ class BloombergManager:
     def _subscribe_emsx_orders(self) -> None:
         """Subscribe to all EMSX orders so fill updates flow into the cache."""
         subs = blpapi.SubscriptionList()
-        fields = "EMSX_SEQUENCE,EMSX_STATUS,EMSX_FILLED,EMSX_AMOUNT,EMSX_TICKER,EMSX_SIDE"
-        # NOTE: The exact topic string format may need adjustment based on your
-        # EMSX environment. This follows the standard Bloomberg EMSX Python sample.
-        topic = f"{EMSX_SERVICE}/order;fields={fields}"
-        subs.add(topic, correlationId=blpapi.CorrelationId("emsx_orders"))
+        fields = [
+            "EMSX_SEQUENCE", "EMSX_STATUS", "EMSX_FILLED",
+            "EMSX_AMOUNT", "EMSX_TICKER", "EMSX_SIDE",
+        ]
+        # Fields must be passed as a list argument, NOT embedded in the topic string.
+        subs.add(
+            f"{EMSX_SERVICE}/order",
+            fields,
+            correlationId=blpapi.CorrelationId("emsx_orders"),
+        )
         self._session.subscribe(subs)
 
     # ------------------------------------------------------------------

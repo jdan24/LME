@@ -135,21 +135,52 @@ async def fill_status_endpoint(ids: str = Query(..., description="Comma-separate
 
 @app.get("/api/debug/emsx-schema")
 async def emsx_schema():
-    """List every operation exposed by the connected EMSX service. Use this to find the correct request type name."""
+    """
+    Probe the connected EMSX service for available operations.
+    Returns schema introspection results AND a trial list of known candidate names.
+    """
     if not bbg.connected:
         raise HTTPException(503, "Bloomberg session not available")
 
     svc = bbg.emsx_service
-    ops = []
+
+    # Try schema introspection via blpapi
+    schema_ops: list[str] = []
+    schema_error: str | None = None
     try:
         n = svc.numOperations()
         for i in range(n):
             op = svc.getOperation(i)
-            ops.append(op.name())
+            schema_ops.append(str(op.name()))
     except Exception as exc:
-        raise HTTPException(500, f"Failed to introspect service schema: {exc}")
+        schema_error = str(exc)
 
-    return {"service": EMSX_SERVICE, "operations": sorted(ops)}
+    # Probe known candidate names — createRequest() doesn't throw; sending does.
+    # Instead, check if the operation exists in the service schema by name lookup.
+    candidates = [
+        "CreateOrder",
+        "RouteOrder",
+        "CreateOrderAndRoute",
+        "CreateOrderAndRouteEx",
+        "CreateOrderAndRouteExtended",
+        "CreateOrderAndRouteRequest",
+        "CreateOrderAndRouteExtendedRequest",
+        "CreateOrderAndRouteManually",
+    ]
+    probe_results: dict[str, str] = {}
+    for name in candidates:
+        try:
+            svc.getOperation(name)
+            probe_results[name] = "FOUND"
+        except Exception as exc:
+            probe_results[name] = f"NOT FOUND: {exc}"
+
+    return {
+        "service": EMSX_SERVICE,
+        "schema_operations": sorted(schema_ops),
+        "schema_error": schema_error,
+        "candidate_probe": probe_results,
+    }
 
 
 @app.get("/api/settlement")
