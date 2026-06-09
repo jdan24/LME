@@ -135,12 +135,16 @@ class BloombergManager:
 
     def _handle_emsx_update(self, msg: blpapi.Message) -> None:
         try:
+            if not msg.hasElement("EMSX_SEQUENCE"):
+                return  # Heartbeat or partial update — nothing to cache
             seq = msg.getElementAsInteger("EMSX_SEQUENCE")
-            status = msg.getElementAsString("EMSX_STATUS") if msg.hasElement("EMSX_STATUS") else ""
-            filled = msg.getElementAsInteger("EMSX_FILLED") if msg.hasElement("EMSX_FILLED") else 0
-            amount = msg.getElementAsInteger("EMSX_AMOUNT") if msg.hasElement("EMSX_AMOUNT") else 0
-            ticker = msg.getElementAsString("EMSX_TICKER") if msg.hasElement("EMSX_TICKER") else ""
-            side_int = msg.getElementAsInteger("EMSX_SIDE") if msg.hasElement("EMSX_SIDE") else 1
+            if seq == 0:
+                return  # Bloomberg sometimes sends seq=0 for dummy/initial messages
+            status   = msg.getElementAsString("EMSX_STATUS")  if msg.hasElement("EMSX_STATUS")  else ""
+            filled   = msg.getElementAsInteger("EMSX_FILLED") if msg.hasElement("EMSX_FILLED") else 0
+            amount   = msg.getElementAsInteger("EMSX_AMOUNT") if msg.hasElement("EMSX_AMOUNT") else 0
+            ticker   = msg.getElementAsString("EMSX_TICKER")  if msg.hasElement("EMSX_TICKER")  else ""
+            side_int = msg.getElementAsInteger("EMSX_SIDE")   if msg.hasElement("EMSX_SIDE")   else 1
 
             with self._order_lock:
                 self._order_cache[seq] = {
