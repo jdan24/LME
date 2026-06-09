@@ -133,6 +133,25 @@ async def fill_status_endpoint(ids: str = Query(..., description="Comma-separate
     return {"fills": fills}
 
 
+@app.get("/api/debug/emsx-schema")
+async def emsx_schema():
+    """List every operation exposed by the connected EMSX service. Use this to find the correct request type name."""
+    if not bbg.connected:
+        raise HTTPException(503, "Bloomberg session not available")
+
+    svc = bbg.emsx_service
+    ops = []
+    try:
+        n = svc.numOperations()
+        for i in range(n):
+            op = svc.getOperation(i)
+            ops.append(op.name())
+    except Exception as exc:
+        raise HTTPException(500, f"Failed to introspect service schema: {exc}")
+
+    return {"service": EMSX_SERVICE, "operations": sorted(ops)}
+
+
 @app.get("/api/settlement")
 async def settlement_endpoint(tickers: str = Query(..., description="Comma-separated Bloomberg tickers")):
     if not bbg.connected:
