@@ -58,7 +58,9 @@ def submit_order(order: dict) -> dict:
     Returns: {emsxSequence, status, orderId}
     """
     svc = bbg.emsx_service
-    req = svc.createRequest("CreateOrderAndRoute")
+    # CreateOrderAndRouteEx (not the plain CreateOrderAndRoute) is the operation
+    # that supports EMSX_STRATEGY_PARAMS — required by broker WFGB.
+    req = svc.createRequest("CreateOrderAndRouteEx")
 
     # Core required fields
     req.set("EMSX_TICKER",     order["ticker"])             # e.g. "LAH6 Comdty"
