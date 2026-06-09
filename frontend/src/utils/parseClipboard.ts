@@ -5,8 +5,8 @@ const HEADER = {
   contract: 'Contract',
   bs:       'BS',
   lots:     'Lots',
-  orderId:  'ORDERID',
-  mkt:      'MKT',
+  orderId:  'OrderId',
+  mkt:      'Mkt',
 } as const
 
 const REQUIRED_HEADERS = Object.values(HEADER)
