@@ -9,8 +9,8 @@ import blpapi
 import logging
 from datetime import date, timedelta
 
-from bloomberg import bbg
-from config import SETTLE_PRICE_FIELD, SETTLE_DATE_FIELD
+from .bloomberg import bbg
+from .config import SETTLE_PRICE_FIELD, SETTLE_DATE_FIELD
 
 log = logging.getLogger(__name__)
 

@@ -18,7 +18,7 @@ import queue
 import logging
 from typing import Any
 
-from config import BBG_HOST, BBG_PORT, EMSX_SERVICE, REF_SERVICE
+from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, REF_SERVICE
 
 log = logging.getLogger(__name__)
 

@@ -14,8 +14,8 @@ import blpapi
 import logging
 from typing import Any
 
-from bloomberg import bbg
-from config import (
+from .bloomberg import bbg
+from .config import (
     EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE,
     EMSX_TIF, EMSX_HAND_INSTR,
 )
