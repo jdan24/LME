@@ -1,36 +1,64 @@
 import type { Order } from '../types'
 
-const REQUIRED_HEADERS = ['Contract', 'BS', 'Lots', 'OrderID', 'MKT']
+// Exact column header names as they appear in EaTrade's clipboard output
+const HEADER = {
+  contract: 'Contract',
+  bs:       'BS',
+  lots:     'Lots',
+  orderId:  'ORDERID',
+  mkt:      'MKT',
+} as const
+
+const REQUIRED_HEADERS = Object.values(HEADER)
 
 export function parseClipboard(raw: string): { orders: Order[]; errors: string[] } {
   const errors: string[] = []
-  const lines = raw.trim().split(/\r?\n/).filter(l => l.trim())
+
+  // Strip BOM and split into non-empty lines
+  const lines = raw
+    .replace(/^﻿/, '')
+    .trim()
+    .split(/\r?\n/)
+    .filter(l => l.trim())
 
   if (lines.length === 0) {
     return { orders: [], errors: ['Clipboard is empty'] }
   }
 
   const headerCells = lines[0].split('\t').map(c => c.trim())
-  const isHeader = headerCells.some(h => REQUIRED_HEADERS.includes(h))
+  const isHeader = headerCells.some(h => REQUIRED_HEADERS.includes(h as typeof REQUIRED_HEADERS[number]))
 
   if (!isHeader) {
-    return { orders: [], errors: ['Could not find expected column headers (Contract, BS, Lots, OrderID, MKT). Make sure to copy including the header row.'] }
+    return {
+      orders: [],
+      errors: [
+        `Could not find expected column headers. Make sure to copy the grid including the header row from EaTrade.` +
+        `\nExpected: ${REQUIRED_HEADERS.join(', ')}` +
+        `\nFound:    ${headerCells.join(', ')}`,
+      ],
+    }
   }
 
   const idx = {
-    contract: headerCells.findIndex(h => h === 'Contract'),
-    bs: headerCells.findIndex(h => h === 'BS'),
-    lots: headerCells.findIndex(h => h === 'Lots'),
-    orderId: headerCells.findIndex(h => h === 'OrderID'),
-    mkt: headerCells.findIndex(h => h === 'MKT'),
+    contract: headerCells.findIndex(h => h === HEADER.contract),
+    bs:       headerCells.findIndex(h => h === HEADER.bs),
+    lots:     headerCells.findIndex(h => h === HEADER.lots),
+    orderId:  headerCells.findIndex(h => h === HEADER.orderId),
+    mkt:      headerCells.findIndex(h => h === HEADER.mkt),
   }
 
-  const missing = Object.entries(idx)
+  const missing = (Object.entries(idx) as [keyof typeof idx, number][])
     .filter(([, v]) => v === -1)
-    .map(([k]) => k)
+    .map(([k]) => HEADER[k])
 
   if (missing.length > 0) {
-    return { orders: [], errors: [`Missing required columns: ${missing.join(', ')}`] }
+    return {
+      orders: [],
+      errors: [
+        `Missing required columns: ${missing.join(', ')}` +
+        `\nHeaders found in pasted data: ${headerCells.join(', ')}`,
+      ],
+    }
   }
 
   const dataLines = lines.slice(1)
@@ -43,9 +71,9 @@ export function parseClipboard(raw: string): { orders: Order[]; errors: string[]
     if (mkt !== 'LME_NTP') return
 
     const contract = cells[idx.contract] ?? ''
-    const bs = (cells[idx.bs] ?? '').toUpperCase()
-    const lotsRaw = cells[idx.lots] ?? ''
-    const orderId = cells[idx.orderId] ?? ''
+    const bs       = (cells[idx.bs] ?? '').toUpperCase()
+    const lotsRaw  = cells[idx.lots] ?? ''
+    const orderId  = cells[idx.orderId] ?? ''
 
     if (!contract) {
       errors.push(`Row ${i + 2}: missing Contract`)
