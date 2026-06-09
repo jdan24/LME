@@ -144,7 +144,7 @@ export default function App() {
             <div>
               <h1 className="text-2xl font-bold text-white">LME Order Entry</h1>
               <p className="text-slate-400 text-sm mt-0.5">
-                {submitted.length} order{submitted.length !== 1 ? 's' : ''} submitted to Bloomberg EMSX
+                {submitted.length} order{submitted.length !== 1 ? 's' : ''} staged in Bloomberg EMSX — route manually in EMSX
               </p>
             </div>
             <button

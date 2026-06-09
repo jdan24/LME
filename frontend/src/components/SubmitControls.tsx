@@ -24,15 +24,15 @@ export function SubmitControls({ orders, config, onSubmit, onReset, submitting }
   if (confirming) {
     return (
       <div className="bg-slate-800 border border-slate-600 rounded-xl p-6 text-center space-y-4">
-        <h2 className="text-white text-lg font-semibold">Confirm Order Submission</h2>
+        <h2 className="text-white text-lg font-semibold">Confirm Order Staging</h2>
         <div className="text-slate-300 text-sm space-y-1">
-          <p><span className="font-mono">{orders.length}</span> order{orders.length !== 1 ? 's' : ''} will be submitted to Bloomberg EMSX</p>
+          <p><span className="font-mono">{orders.length}</span> order{orders.length !== 1 ? 's' : ''} will be <span className="text-amber-400 font-medium">staged</span> into Bloomberg EMSX (not routed)</p>
           {buys.length  > 0 && <p className="text-green-400">▲ {buys.length}  BUY order{buys.length  !== 1 ? 's' : ''} ({buys.reduce((s, o)  => s + o.lots, 0).toLocaleString()} lots)</p>}
           {sells.length > 0 && <p className="text-red-400">▼ {sells.length} SELL order{sells.length !== 1 ? 's' : ''} ({sells.reduce((s, o) => s + o.lots, 0).toLocaleString()} lots)</p>}
         </div>
         <div className="text-slate-500 text-xs border border-slate-700 rounded-lg p-3 text-left">
           <div className="grid grid-cols-2 gap-1">
-            <span>Broker:</span>       <span className="text-slate-300 font-mono">{broker}</span>
+            <span>Intended Broker:</span> <span className="text-slate-300 font-mono">{broker}</span>
             <span>Account:</span>      <span className="text-slate-300 font-mono">{account}</span>
             <span>Order Type:</span>   <span className="text-slate-300 font-mono">{orderType}</span>
             <span>TIF:</span>          <span className="text-slate-300 font-mono">{tif}</span>
@@ -52,7 +52,7 @@ export function SubmitControls({ orders, config, onSubmit, onReset, submitting }
             disabled={submitting}
             className="px-6 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {submitting ? 'Submitting…' : `Submit ${orders.length} Order${orders.length !== 1 ? 's' : ''}`}
+            {submitting ? 'Staging…' : `Stage ${orders.length} Order${orders.length !== 1 ? 's' : ''}`}
           </button>
         </div>
       </div>
@@ -77,7 +77,7 @@ export function SubmitControls({ orders, config, onSubmit, onReset, submitting }
         disabled={noneSelected}
         className="px-5 py-2 rounded-lg bg-blue-600 text-white hover:bg-blue-500 transition-colors text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed"
       >
-        Submit {orders.length} Order{orders.length !== 1 ? 's' : ''} to EMSX →
+        Stage {orders.length} Order{orders.length !== 1 ? 's' : ''} into EMSX →
       </button>
     </div>
   )

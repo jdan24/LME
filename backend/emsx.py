@@ -33,20 +33,19 @@ def _try_set(req: blpapi.Request, field: str, value) -> None:
 
 def log_order_schema() -> None:
     """
-    Log the CreateOrderAndRouteEx request schema to the terminal at startup.
-    Shows every field, its type, cardinality (min/max), and whether it is
-    REQUIRED — recursing into EMSX_STRATEGY_PARAMS — so encode failures can be
-    diagnosed without hitting a debug endpoint.
+    Log the CreateOrder request schema to the terminal at startup. Shows every
+    field, its type, cardinality (min/max), and whether it is REQUIRED, so
+    encode/validation failures can be diagnosed without hitting a debug endpoint.
     """
     try:
         svc = bbg.emsx_service
-        op = svc.getOperation("CreateOrderAndRouteEx")
+        op = svc.getOperation("CreateOrder")
         req_def = op.requestDefinition()
         lines: list[str] = []
         _describe_schema(req_def, lines, 0)
-        log.info("CreateOrderAndRouteEx request schema:\n%s", "\n".join(lines))
+        log.info("CreateOrder request schema:\n%s", "\n".join(lines))
     except Exception:
-        log.exception("Could not log CreateOrderAndRouteEx schema")
+        log.exception("Could not log CreateOrder schema")
 
 
 def _describe_schema(elem_def, lines: list[str], depth: int) -> None:
@@ -95,15 +94,19 @@ def _set_strategy(req: blpapi.Request, name: str) -> None:
 
 def submit_order(order: dict) -> dict:
     """
-    Submit a single order to EMSX via CreateOrderAndRouteRequest.
+    Stage a single order into the EMSX blotter via CreateOrder.
+
+    The order is created but NOT routed — the trader reviews and routes it
+    manually inside EMSX. Because nothing is routed, the broker's strategy
+    requirement does not apply here (strategy is a route-time concern), so no
+    EMSX_STRATEGY_PARAMS is sent.
 
     order keys expected: ticker, bs, lots, orderId
     Returns: {emsxSequence, status, orderId}
     """
     svc = bbg.emsx_service
-    # CreateOrderAndRouteEx (not the plain CreateOrderAndRoute) is the operation
-    # that supports EMSX_STRATEGY_PARAMS — required by broker WFGB.
-    req = svc.createRequest("CreateOrderAndRouteEx")
+    # CreateOrder stages the order in the blotter without routing it to a broker.
+    req = svc.createRequest("CreateOrder")
 
     # Core required fields
     req.set("EMSX_TICKER",     order["ticker"])             # e.g. "LAH6 Comdty"
@@ -111,19 +114,17 @@ def submit_order(order: dict) -> dict:
     req.set("EMSX_AMOUNT",     int(order["lots"]))
     req.set("EMSX_ORDER_TYPE", EMSX_ORDER_TYPE)        # "MOC"
     req.set("EMSX_TIF",        EMSX_TIF)               # "DAY"
-    req.set("EMSX_BROKER",     EMSX_BROKER)            # "KMTF"
-    req.set("EMSX_ACCOUNT",    EMSX_ACCOUNT)           # from .env
 
-    # Optional fields — set defensively in case the service schema differs
+    # Optional fields — set defensively in case the CreateOrder schema differs.
+    # Broker is the *intended* route destination, pre-filled for the trader; the
+    # actual route (and strategy) is selected manually in EMSX.
+    _try_set(req, "EMSX_BROKER",           EMSX_BROKER)      # "WFGB" / "KMTF"
+    _try_set(req, "EMSX_ACCOUNT",          EMSX_ACCOUNT)     # from .env
     _try_set(req, "EMSX_HAND_INSTRUCTION", EMSX_HAND_INSTR)  # "MAN"
     _try_set(req, "EMSX_NOTES",            order["orderId"])  # EATrade order ID
 
-    # Strategy is a structured element, NOT a scalar field. Broker WFGB requires
-    # it to be present. "NONE" is a no-algo strategy with zero fields.
-    _set_strategy(req, "NONE")
-
     log.info(
-        "Submitting EMSX order: %s %s %d lots via %s",
+        "Staging EMSX order (no route): %s %s %d lots, intended broker %s",
         order["bs"], order["ticker"], order["lots"], EMSX_BROKER,
     )
     # Dump the fully-built request so encode failures can be diagnosed
