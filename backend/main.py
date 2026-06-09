@@ -71,6 +71,10 @@ class SubmitRequest(BaseModel):
     orders: list[OrderIn]
 
 
+class DuplicateCheckRequest(BaseModel):
+    orderIds: list[str]
+
+
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
@@ -90,6 +94,22 @@ async def get_config():
         "tif": EMSX_TIF,
         "handlingInstr": EMSX_HAND_INSTR,
     }
+
+
+@app.post("/api/check-duplicates")
+async def check_duplicates_endpoint(body: DuplicateCheckRequest):
+    """
+    Given a list of EATrade OrderIds, return those already present in today's
+    EMSX blotter (matched against EMSX_ORDER_REF_ID / EMSX_NOTES). If Bloomberg
+    is unavailable the check is skipped (checked=False) rather than erroring, so
+    importing still works offline.
+    """
+    if not bbg.connected:
+        return {"duplicates": [], "checked": False}
+
+    existing = bbg.get_existing_order_refs(today_only=True)
+    dupes = [oid for oid in body.orderIds if oid.strip() in existing]
+    return {"duplicates": dupes, "checked": True}
 
 
 @app.post("/api/submit-orders")

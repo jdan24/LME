@@ -5,6 +5,7 @@ export interface Order {
   lots: number
   orderId: string
   mkt: string
+  importedAt: string // ISO timestamp captured when the row was pasted (not sent to EMSX)
 }
 
 export interface SubmittedOrder extends Order {

@@ -64,6 +64,7 @@ export function parseClipboard(raw: string): { orders: Order[]; errors: string[]
 
   const dataLines = lines.slice(1)
   const orders: Order[] = []
+  const importedAt = new Date().toISOString()  // one timestamp for this paste batch
 
   dataLines.forEach((line, i) => {
     const cells = line.split('\t').map(c => c.trim())
@@ -102,6 +103,7 @@ export function parseClipboard(raw: string): { orders: Order[]; errors: string[]
       lots,
       orderId,
       mkt,
+      importedAt,
     })
   })
 

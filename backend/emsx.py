@@ -121,7 +121,10 @@ def submit_order(order: dict) -> dict:
     _try_set(req, "EMSX_BROKER",           EMSX_BROKER)      # "WFGB" / "KMTF"
     _try_set(req, "EMSX_ACCOUNT",          EMSX_ACCOUNT)     # from .env
     _try_set(req, "EMSX_HAND_INSTRUCTION", EMSX_HAND_INSTR)  # "MAN"
-    _try_set(req, "EMSX_NOTES",            order["orderId"])  # EATrade order ID
+    # EATrade OrderId written to both: ORDER_REF_ID for reliable de-dup matching,
+    # NOTES so the trader sees it on the blotter.
+    _try_set(req, "EMSX_NOTES",         order["orderId"])
+    _try_set(req, "EMSX_ORDER_REF_ID",  order["orderId"])
 
     log.info(
         "Staging EMSX order (no route): %s %s %d lots, intended broker %s",

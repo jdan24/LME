@@ -5,7 +5,7 @@ import { OrderTable } from './components/OrderTable'
 import { SubmitControls } from './components/SubmitControls'
 import { FillStatus } from './components/FillStatus'
 import { SettlementPanel } from './components/SettlementPanel'
-import { submitOrders, getConfig } from './api/client'
+import { submitOrders, getConfig, checkDuplicates } from './api/client'
 
 interface SubmittedOrder {
   emsxSequence: number
@@ -19,6 +19,8 @@ export default function App() {
   const [appState, setAppState] = useState<AppState>('EMPTY')
   const [orders, setOrders] = useState<Order[]>([])
   const [selected, setSelected] = useState<boolean[]>([])
+  const [duplicateIds, setDuplicateIds] = useState<Set<string>>(new Set())
+  const [dupChecked, setDupChecked] = useState(true)
   const [parseErrors, setParseErrors] = useState<string[]>([])
   const [submitted, setSubmitted] = useState<SubmittedOrder[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -38,14 +40,29 @@ export default function App() {
     setOrders(parsed)
     // All rows start UNCHECKED — the user explicitly selects which to submit
     setSelected(new Array(parsed.length).fill(false))
+    setDuplicateIds(new Set())
+    setDupChecked(true)
     setParseErrors(errors)
     setAppState(parsed.length > 0 ? 'REVIEW' : 'EMPTY')
     setSubmitError(null)
+
+    // De-dup: ask the backend which OrderIds are already in today's EMSX blotter
+    if (parsed.length > 0) {
+      const ids = parsed.map(o => o.orderId).filter(Boolean)
+      checkDuplicates(ids)
+        .then(({ duplicates, checked }) => {
+          setDuplicateIds(new Set(duplicates))
+          setDupChecked(checked)
+        })
+        .catch(() => setDupChecked(false))
+    }
   }, [])
 
   const handleReset = useCallback(() => {
     setOrders([])
     setSelected([])
+    setDuplicateIds(new Set())
+    setDupChecked(true)
     setParseErrors([])
     setSubmitted([])
     setSubmitError(null)
@@ -56,7 +73,12 @@ export default function App() {
     setSelected(prev => prev.map((v, i) => (i === index ? !v : v)))
   }, [])
 
-  const selectAll  = useCallback(() => setSelected(prev => prev.map(() => true)),  [])
+  // Select All skips rows already in EMSX (duplicates); a trader can still
+  // manually check a flagged row to override.
+  const selectAll  = useCallback(
+    () => setSelected(orders.map(o => !duplicateIds.has(o.orderId))),
+    [orders, duplicateIds]
+  )
   const selectNone = useCallback(() => setSelected(prev => prev.map(() => false)), [])
 
   // Only checked rows are submitted
@@ -117,6 +139,8 @@ export default function App() {
             errors={parseErrors}
             config={config}
             selected={selected}
+            duplicateIds={duplicateIds}
+            dupChecked={dupChecked}
             onToggle={toggleRow}
             onSelectAll={selectAll}
             onSelectNone={selectNone}

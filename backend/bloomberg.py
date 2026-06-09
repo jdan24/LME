@@ -16,6 +16,7 @@ import blpapi
 import threading
 import queue
 import logging
+from datetime import datetime
 from typing import Any
 
 from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, REF_SERVICE
@@ -93,6 +94,9 @@ class BloombergManager:
         fields = [
             "EMSX_SEQUENCE", "EMSX_STATUS", "EMSX_FILLED",
             "EMSX_AMOUNT", "EMSX_TICKER", "EMSX_SIDE",
+            # For de-duplication: the EATrade OrderId is written to both
+            # EMSX_ORDER_REF_ID and EMSX_NOTES; create-date scopes matches to today.
+            "EMSX_ORDER_REF_ID", "EMSX_NOTES", "EMSX_ORDER_CREATE_DATE",
         ]
         # Fields must be passed as a list argument, NOT embedded in the topic string.
         subs.add(
@@ -148,6 +152,13 @@ class BloombergManager:
             side_raw = msg.getElementAsString("EMSX_SIDE") if msg.hasElement("EMSX_SIDE") else "BUY"
             bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
+            ref_id = msg.getElementAsString("EMSX_ORDER_REF_ID") if msg.hasElement("EMSX_ORDER_REF_ID") else ""
+            notes  = msg.getElementAsString("EMSX_NOTES")        if msg.hasElement("EMSX_NOTES")        else ""
+            create_date = (
+                msg.getElementAsInteger("EMSX_ORDER_CREATE_DATE")
+                if msg.hasElement("EMSX_ORDER_CREATE_DATE") else 0
+            )
+
             with self._order_lock:
                 self._order_cache[seq] = {
                     "emsxSequence": seq,
@@ -156,6 +167,9 @@ class BloombergManager:
                     "lots": amount,
                     "ticker": ticker,
                     "bs": bs,
+                    "refId": ref_id,
+                    "notes": notes,
+                    "createDate": create_date,
                 }
         except Exception:
             log.exception("Failed to parse EMSX update message")
@@ -205,6 +219,29 @@ class BloombergManager:
     def get_cached_orders(self, sequences: list[int]) -> list[dict]:
         with self._order_lock:
             return [self._order_cache[s] for s in sequences if s in self._order_cache]
+
+    def get_existing_order_refs(self, today_only: bool = True) -> set[str]:
+        """
+        Return the set of order references currently in the EMSX blotter, used to
+        de-duplicate re-pasted EATrade orders. The EATrade OrderId is written to
+        both EMSX_ORDER_REF_ID and EMSX_NOTES, so both are collected.
+
+        When today_only is True, orders whose EMSX_ORDER_CREATE_DATE is known and
+        not today are excluded. Orders with an unknown create-date (0) are kept,
+        so de-dup still works if that field isn't delivered by the subscription.
+        """
+        today = int(datetime.now().strftime("%Y%m%d"))
+        refs: set[str] = set()
+        with self._order_lock:
+            for o in self._order_cache.values():
+                cd = o.get("createDate") or 0
+                if today_only and cd and cd != today:
+                    continue
+                for key in ("refId", "notes"):
+                    val = (o.get(key) or "").strip()
+                    if val:
+                        refs.add(val)
+        return refs
 
 
 # Singleton instance — imported by main.py and emsx.py

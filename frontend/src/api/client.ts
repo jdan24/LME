@@ -31,6 +31,13 @@ export async function submitOrders(orders: Order[]): Promise<{ results: Array<{ 
   })
 }
 
+export async function checkDuplicates(orderIds: string[]): Promise<{ duplicates: string[]; checked: boolean }> {
+  return request('/check-duplicates', {
+    method: 'POST',
+    body: JSON.stringify({ orderIds }),
+  })
+}
+
 export async function getFillStatus(ids: number[]): Promise<{ fills: FillStatus[] }> {
   const params = new URLSearchParams({ ids: ids.join(',') })
   return request(`/fill-status?${params}`)
