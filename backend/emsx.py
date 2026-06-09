@@ -18,8 +18,9 @@ from .config import (
 log = logging.getLogger(__name__)
 
 
-def _side_int(bs: str) -> int:
-    return 1 if bs.upper() == "BUY" else 2
+def _normalize_side(bs: str) -> str:
+    """EMSX_SIDE is a STRING field: 'BUY' or 'SELL' (not an integer)."""
+    return "SELL" if bs.upper() in ("SELL", "S", "2") else "BUY"
 
 
 def _try_set(req: blpapi.Request, field: str, value) -> None:
@@ -41,8 +42,8 @@ def submit_order(order: dict) -> dict:
     req = svc.createRequest("CreateOrderAndRoute")
 
     # Core required fields
-    req.set("EMSX_TICKER",     order["ticker"])        # e.g. "LAH6 Comdty"
-    req.set("EMSX_SIDE",       _side_int(order["bs"])) # 1=BUY, 2=SELL
+    req.set("EMSX_TICKER",     order["ticker"])             # e.g. "LAH6 Comdty"
+    req.set("EMSX_SIDE",       _normalize_side(order["bs"])) # "BUY" / "SELL" (string)
     req.set("EMSX_AMOUNT",     int(order["lots"]))
     req.set("EMSX_ORDER_TYPE", EMSX_ORDER_TYPE)        # "MOC"
     req.set("EMSX_TIF",        EMSX_TIF)               # "DAY"
