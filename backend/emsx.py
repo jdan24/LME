@@ -31,6 +31,25 @@ def _try_set(req: blpapi.Request, field: str, value) -> None:
         log.warning("EMSX field %r not supported on this service — skipped", field)
 
 
+def _set_strategy(req: blpapi.Request, name: str) -> None:
+    """
+    Attach an EMSX strategy to the request.
+
+    Strategy is a structured element (EMSX_STRATEGY_PARAMS), not a scalar field:
+        EMSX_STRATEGY_PARAMS
+        ├── EMSX_STRATEGY_NAME            (string)
+        ├── EMSX_STRATEGY_FIELD_INDICATORS[]  (0 = use field data, 1 = ignore)
+        └── EMSX_STRATEGY_FIELDS[]            (EMSX_FIELD_DATA per field)
+
+    "NONE" is a no-algo strategy with zero fields, so we set only the name and
+    leave both parallel arrays empty.
+    """
+    strat = req.getElement("EMSX_STRATEGY_PARAMS")
+    strat.setElement("EMSX_STRATEGY_NAME", name)
+    # EMSX_STRATEGY_FIELD_INDICATORS and EMSX_STRATEGY_FIELDS intentionally left
+    # empty — strategy "NONE" defines no fields.
+
+
 def submit_order(order: dict) -> dict:
     """
     Submit a single order to EMSX via CreateOrderAndRouteRequest.
@@ -53,7 +72,10 @@ def submit_order(order: dict) -> dict:
     # Optional fields — set defensively in case the service schema differs
     _try_set(req, "EMSX_HAND_INSTRUCTION", EMSX_HAND_INSTR)  # "MAN"
     _try_set(req, "EMSX_NOTES",            order["orderId"])  # EATrade order ID
-    _try_set(req, "EMSX_STRATEGY_NAME",    "NONE")            # no algo strategy
+
+    # Strategy is a structured element, NOT a scalar field. Broker WFGB requires
+    # it to be present. "NONE" is a no-algo strategy with zero fields.
+    _set_strategy(req, "NONE")
 
     log.info(
         "Submitting EMSX order: %s %s %d lots via %s",
