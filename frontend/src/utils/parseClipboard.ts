@@ -71,7 +71,7 @@ export function parseClipboard(raw: string): { orders: Order[]; errors: string[]
     if (mkt !== 'LME_NTP') return
 
     const contract = cells[idx.contract] ?? ''
-    const bs       = (cells[idx.bs] ?? '').toUpperCase()
+    const bsRaw    = (cells[idx.bs] ?? '').trim().toUpperCase()
     const lotsRaw  = cells[idx.lots] ?? ''
     const orderId  = cells[idx.orderId] ?? ''
 
@@ -79,8 +79,12 @@ export function parseClipboard(raw: string): { orders: Order[]; errors: string[]
       errors.push(`Row ${i + 2}: missing Contract`)
       return
     }
-    if (bs !== 'BUY' && bs !== 'SELL') {
-      errors.push(`Row ${i + 2}: BS must be BUY or SELL, got "${bs}"`)
+
+    // EaTrade sends "B" for Buy and "S" for Sell
+    const bsMap: Record<string, 'BUY' | 'SELL'> = { B: 'BUY', S: 'SELL' }
+    const bs = bsMap[bsRaw]
+    if (!bs) {
+      errors.push(`Row ${i + 2}: BS must be B or S, got "${bsRaw}"`)
       return
     }
 
