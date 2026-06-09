@@ -31,6 +31,42 @@ def _try_set(req: blpapi.Request, field: str, value) -> None:
         log.warning("EMSX field %r not supported on this service — skipped", field)
 
 
+def log_order_schema() -> None:
+    """
+    Log the CreateOrderAndRouteEx request schema to the terminal at startup.
+    Shows every field, its type, cardinality (min/max), and whether it is
+    REQUIRED — recursing into EMSX_STRATEGY_PARAMS — so encode failures can be
+    diagnosed without hitting a debug endpoint.
+    """
+    try:
+        svc = bbg.emsx_service
+        op = svc.getOperation("CreateOrderAndRouteEx")
+        req_def = op.requestDefinition()
+        lines: list[str] = []
+        _describe_schema(req_def, lines, 0)
+        log.info("CreateOrderAndRouteEx request schema:\n%s", "\n".join(lines))
+    except Exception:
+        log.exception("Could not log CreateOrderAndRouteEx schema")
+
+
+def _describe_schema(elem_def, lines: list[str], depth: int) -> None:
+    type_def = elem_def.typeDefinition()
+    try:
+        mn = elem_def.minValues()
+        mx = elem_def.maxValues()
+    except Exception:
+        mn = mx = None
+    flag = "REQUIRED" if (isinstance(mn, int) and mn >= 1) else "optional"
+    indent = "    " * depth
+    lines.append(f"{indent}{elem_def.name()}  <{type_def.name()}>  min={mn} max={mx}  {flag}")
+    if depth < 5:
+        try:
+            for i in range(type_def.numElementDefinitions()):
+                _describe_schema(type_def.getElementDefinition(i), lines, depth + 1)
+        except Exception:
+            pass
+
+
 def _set_strategy(req: blpapi.Request, name: str) -> None:
     """
     Attach an EMSX strategy to the request.

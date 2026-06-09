@@ -18,7 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .bloomberg import bbg
-from .emsx import submit_order, get_fill_status
+from .emsx import submit_order, get_fill_status, log_order_schema
 from .refdata import get_settlement
 from .config import EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE, EMSX_TIF, EMSX_HAND_INSTR, EMSX_SERVICE
 
@@ -34,6 +34,7 @@ async def lifespan(app: FastAPI):
     try:
         bbg.start()
         log.info("Bloomberg session ready")
+        log_order_schema()
     except Exception as exc:
         log.error("Bloomberg session failed to start: %s", exc)
         # Server starts anyway so health endpoint can report the failure
