@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from .bloomberg import bbg
 from .emsx import submit_order, get_fill_status
 from .refdata import get_settlement
-from .config import EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE, EMSX_TIF, EMSX_HAND_INSTR
+from .config import EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE, EMSX_TIF, EMSX_HAND_INSTR, EMSX_SERVICE
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
