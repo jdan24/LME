@@ -116,6 +116,18 @@ async def check_duplicates_endpoint(body: DuplicateCheckRequest):
     return {"duplicates": dupes, "checked": True}
 
 
+@app.get("/api/blotter-orders")
+async def blotter_orders_endpoint():
+    """
+    Every EMSX order currently in the shared-blotter cache. Lets a teammate open
+    the app fresh and monitor fills for orders already staged, without importing.
+    Filtering (LME-only, exclude cancelled) is done client-side.
+    """
+    if not bbg.connected:
+        raise HTTPException(503, "Bloomberg session not available")
+    return {"orders": bbg.get_all_cached_orders()}
+
+
 @app.get("/api/debug/order-cache")
 async def order_cache_debug():
     """Snapshot of the EMSX order subscription cache, for diagnosing de-dup."""

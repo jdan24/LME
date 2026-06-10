@@ -43,6 +43,10 @@ export async function getFillStatus(ids: number[]): Promise<{ fills: FillStatus[
   return request(`/fill-status?${params}`)
 }
 
+export async function getBlotterOrders(): Promise<{ orders: Array<FillStatus & { notes?: string }> }> {
+  return request('/blotter-orders')
+}
+
 export async function getSettlement(tickers: string[]): Promise<{ settlements: SettlementPrice[] }> {
   const params = new URLSearchParams({ tickers: tickers.join(',') })
   return request(`/settlement?${params}`)

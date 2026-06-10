@@ -284,6 +284,12 @@ class BloombergManager:
         with self._order_lock:
             return [self._order_cache[s] for s in sequences if s in self._order_cache]
 
+    def get_all_cached_orders(self) -> list[dict]:
+        """Every order in the shared-blotter cache — lets a teammate pick up a
+        monitoring session without re-importing."""
+        with self._order_lock:
+            return list(self._order_cache.values())
+
     def get_existing_order_refs(self) -> set[str]:
         """
         Return the EATrade OrderIds currently in the EMSX blotter, used to

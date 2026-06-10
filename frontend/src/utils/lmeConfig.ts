@@ -14,6 +14,14 @@ export function metalName(contract: string): string {
   return METAL_PREFIXES[prefix] ?? contract
 }
 
+// True for a Bloomberg ticker that is an LME metal future (e.g. "LXN6 Comdty").
+// Used to filter the shared EMSX blotter down to LME orders.
+export function isLmeTicker(ticker: string): boolean {
+  if (!/ Comdty$/i.test(ticker)) return false
+  const prefix = ticker.trim().slice(0, 2).toUpperCase()
+  return Object.prototype.hasOwnProperty.call(METAL_PREFIXES, prefix)
+}
+
 // Bloomberg futures month codes
 const MONTH_CODES: Record<string, string> = {
   F: 'Jan', G: 'Feb', H: 'Mar', J: 'Apr',

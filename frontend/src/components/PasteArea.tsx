@@ -4,12 +4,17 @@ import type { Order } from '../types'
 
 interface Props {
   onParsed: (orders: Order[], errors: string[]) => void
+  // Pull LME orders already in the shared EMSX blotter. Resolves to the number
+  // of orders loaded (0 if none); rejects if the bridge is unreachable.
+  onMonitorBlotter: () => Promise<number>
 }
 
-export function PasteArea({ onParsed }: Props) {
+export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [raw, setRaw] = useState('')
   const [parseError, setParseError] = useState<string | null>(null)
+  const [monitorLoading, setMonitorLoading] = useState(false)
+  const [monitorMsg, setMonitorMsg] = useState<string | null>(null)
 
   // Auto-focus the textarea so Ctrl+V works immediately without clicking
   useEffect(() => {
@@ -44,6 +49,26 @@ export function PasteArea({ onParsed }: Props) {
 
   const handleChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     parse(e.target.value)
+  }
+
+  const handleMonitor = async () => {
+    setMonitorLoading(true)
+    setMonitorMsg(null)
+    try {
+      const count = await onMonitorBlotter()
+      // On success the view navigates to Fill Status; only a zero result returns here.
+      if (count === 0) {
+        setMonitorMsg('No active LME orders found in the EMSX blotter.')
+      }
+    } catch (e) {
+      setMonitorMsg(
+        e instanceof Error
+          ? `Could not reach the Bloomberg bridge: ${e.message}`
+          : 'Could not load orders from the EMSX blotter.'
+      )
+    } finally {
+      setMonitorLoading(false)
+    }
   }
 
   return (
@@ -89,6 +114,30 @@ export function PasteArea({ onParsed }: Props) {
 
         {raw && !parseError && (
           <p className="text-slate-500 text-xs">Parsing…</p>
+        )}
+
+        {/* Pick up a monitoring session without importing — pulls orders already
+            staged in the shared EMSX blotter. */}
+        <div className="pt-2 border-t border-slate-800 flex items-center gap-3">
+          <button
+            onClick={handleMonitor}
+            disabled={monitorLoading}
+            className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
+          >
+            {monitorLoading && (
+              <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+            )}
+            Monitor orders already in EMSX →
+          </button>
+          <span className="text-slate-500 text-xs">
+            Skip importing — track fills for orders already staged in the blotter.
+          </span>
+        </div>
+
+        {monitorMsg && (
+          <div className="bg-slate-800/60 border border-slate-600 rounded-lg px-4 py-2 text-slate-300 text-xs">
+            {monitorMsg}
+          </div>
         )}
       </div>
     </div>

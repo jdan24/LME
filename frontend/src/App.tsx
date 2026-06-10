@@ -5,7 +5,8 @@ import { OrderTable } from './components/OrderTable'
 import { SubmitControls } from './components/SubmitControls'
 import { FillStatus } from './components/FillStatus'
 import { SettlementPanel } from './components/SettlementPanel'
-import { submitOrders, getConfig, checkDuplicates } from './api/client'
+import { submitOrders, getConfig, checkDuplicates, getBlotterOrders } from './api/client'
+import { isLmeTicker } from './utils/lmeConfig'
 
 interface SubmittedOrder {
   emsxSequence: number
@@ -101,6 +102,26 @@ export default function App() {
     runDupCheck(orders.map(o => o.orderId).filter(Boolean))
   }, [orders, runDupCheck])
 
+  // Pick up a monitoring session without importing: pull LME orders already in
+  // the shared EMSX blotter. Returns the count loaded (0 if none found) and
+  // throws if the bridge is unreachable, so the caller can show feedback.
+  const handleMonitorBlotter = useCallback(async (): Promise<number> => {
+    const { orders: blotter } = await getBlotterOrders()
+    // Active + filled LME orders; cancelled ones are excluded.
+    const lme = blotter.filter(o => isLmeTicker(o.ticker) && !/CANCEL/i.test(o.status))
+    if (lme.length === 0) return 0
+    const list: SubmittedOrder[] = lme.map(o => ({
+      emsxSequence: o.emsxSequence,
+      orderId: o.notes ?? '',
+      ticker: o.ticker,
+      bs: o.bs,
+      lots: o.lots,
+    }))
+    setSubmitted(list)
+    setAppState('MONITORING')
+    return lme.length
+  }, [])
+
   const handleReset = useCallback(() => {
     dupBatchRef.current++  // cancel any in-flight retry loop
     setOrders([])
@@ -118,11 +139,11 @@ export default function App() {
     setSelected(prev => prev.map((v, i) => (i === index ? !v : v)))
   }, [])
 
-  // Select All skips rows already in EMSX (duplicates); a trader can still
-  // manually check a flagged row to override.
+  // Select All checks every row. Rows already in EMSX stay flagged (⚠ IN EMSX)
+  // so the trader still sees the duplicate risk before staging.
   const selectAll  = useCallback(
-    () => setSelected(orders.map(o => !duplicateIds.has(o.orderId))),
-    [orders, duplicateIds]
+    () => setSelected(orders.map(() => true)),
+    [orders]
   )
   const selectNone = useCallback(() => setSelected(prev => prev.map(() => false)), [])
 
@@ -158,7 +179,7 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-900">
       {appState === 'EMPTY' && (
-        <PasteArea onParsed={handleParsed} />
+        <PasteArea onParsed={handleParsed} onMonitorBlotter={handleMonitorBlotter} />
       )}
 
       {(appState === 'REVIEW' || appState === 'SUBMITTING') && (

@@ -35,9 +35,7 @@ export function OrderTable({
   const [showSummary, setShowSummary] = useState(false)
 
   const selectedCount  = selected.filter(Boolean).length
-  const selectableCount = orders.filter(o => !duplicateIds.has(o.orderId)).length
-  const allSelected    = selectableCount > 0 &&
-    orders.every((o, i) => duplicateIds.has(o.orderId) || selected[i])
+  const allSelected    = orders.length > 0 && selectedCount === orders.length
   const dupCount = orders.filter(o => duplicateIds.has(o.orderId)).length
 
   const selectedOrders = orders.filter((_, i) => selected[i])

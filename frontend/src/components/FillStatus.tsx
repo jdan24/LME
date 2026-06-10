@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { getFillStatus } from '../api/client'
 import type { FillStatus as FillStatusType } from '../types'
 import { contractLabel } from '../utils/lmeConfig'
 import { TradeRecap } from './TradeRecap'
+import { OrderSummary } from './OrderSummary'
 
 interface Props {
   emsxSequences: number[]
@@ -15,6 +16,7 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
   const [loading, setLoading] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showSummary, setShowSummary] = useState(false)
 
   const allFilled = fills.length > 0 && fills.every(f => f.filledAmount >= f.lots)
 
@@ -32,6 +34,13 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
     }
   }
 
+  // Pull fills once on mount so the screen is populated immediately — both after
+  // submitting and when a teammate picks up a session from the blotter.
+  useEffect(() => {
+    if (emsxSequences.length > 0) refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   const contractFromTicker = (ticker: string) => ticker.replace(' Comdty', '')
 
   return (
@@ -45,17 +54,29 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
             </p>
           )}
         </div>
-        <button
-          onClick={refresh}
-          disabled={loading}
-          className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
-        >
-          {loading ? (
-            <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
-          ) : '↻'}
-          Refresh Fills
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowSummary(true)}
+            className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors text-sm font-medium"
+          >
+            Summarize Selected
+          </button>
+          <button
+            onClick={refresh}
+            disabled={loading}
+            className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
+          >
+            {loading ? (
+              <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+            ) : '↻'}
+            Refresh Fills
+          </button>
+        </div>
       </div>
+
+      {showSummary && (
+        <OrderSummary orders={submittedOrders} onClose={() => setShowSummary(false)} />
+      )}
 
       {error && (
         <div className="bg-red-900/40 border border-red-700 rounded-lg p-3 text-red-300 text-sm">
