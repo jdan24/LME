@@ -20,6 +20,7 @@ export interface FillStatus {
   bs: 'BUY' | 'SELL'
   lots: number
   filledAmount: number
+  avgPrice: number
   status: string
 }
 

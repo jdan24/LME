@@ -94,6 +94,8 @@ class BloombergManager:
         fields = [
             "EMSX_SEQUENCE", "EMSX_STATUS", "EMSX_FILLED",
             "EMSX_AMOUNT", "EMSX_TICKER", "EMSX_SIDE",
+            # Average fill price — populated as the order fills; used for the recap.
+            "EMSX_AVG_PRICE",
             # For de-duplication: the EATrade OrderId is written to both
             # EMSX_ORDER_REF_ID and EMSX_NOTES; create-date scopes matches to today.
             "EMSX_ORDER_REF_ID", "EMSX_NOTES", "EMSX_ORDER_CREATE_DATE",
@@ -147,6 +149,7 @@ class BloombergManager:
             status = msg.getElementAsString("EMSX_STATUS")  if msg.hasElement("EMSX_STATUS")  else ""
             filled = msg.getElementAsInteger("EMSX_FILLED") if msg.hasElement("EMSX_FILLED") else 0
             amount = msg.getElementAsInteger("EMSX_AMOUNT") if msg.hasElement("EMSX_AMOUNT") else 0
+            avg_price = msg.getElementAsFloat("EMSX_AVG_PRICE") if msg.hasElement("EMSX_AVG_PRICE") else 0.0
             ticker = msg.getElementAsString("EMSX_TICKER")  if msg.hasElement("EMSX_TICKER")  else ""
             # Subscription messages send EMSX_SIDE as a string ("BUY"/"SELL"), not an integer
             side_raw = msg.getElementAsString("EMSX_SIDE") if msg.hasElement("EMSX_SIDE") else "BUY"
@@ -164,6 +167,7 @@ class BloombergManager:
                     "emsxSequence": seq,
                     "status": status,
                     "filledAmount": filled,
+                    "avgPrice": avg_price,
                     "lots": amount,
                     "ticker": ticker,
                     "bs": bs,

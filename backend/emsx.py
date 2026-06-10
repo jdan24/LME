@@ -193,6 +193,7 @@ def get_fill_status(sequences: list[int]) -> list[dict]:
                 "emsxSequence": seq,
                 "status": "PENDING",
                 "filledAmount": 0,
+                "avgPrice": 0.0,
                 "lots": 0,
                 "ticker": "",
                 "bs": "",

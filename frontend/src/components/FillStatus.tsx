@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { getFillStatus } from '../api/client'
 import type { FillStatus as FillStatusType } from '../types'
 import { contractLabel } from '../utils/lmeConfig'
+import { TradeRecap } from './TradeRecap'
 
 interface Props {
   emsxSequences: number[]
@@ -116,6 +117,8 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
           </tbody>
         </table>
       </div>
+
+      <TradeRecap submittedOrders={submittedOrders} fills={fills} />
 
       {allFilled && (
         <div className="flex justify-end">
