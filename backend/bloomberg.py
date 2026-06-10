@@ -117,12 +117,12 @@ class BloombergManager:
             "EMSX_AVG_PRICE",
             # Full EATrade OrderId for de-duplication.
             "EMSX_NOTES",
-            # NOTE: no order create-date field yet. EMSX_ORDER_CREATE_DATE,
-            # EMSX_ORDER_CREATE_TIME_MICROSEC, and EMSX_AS_OF_DATE are all rejected
-            # as *subscription* fields on this service (they exist only in the
-            # CreateOrder *request* schema). log_subscription_schema() dumps the
-            # actual subscribable fields so the correct create-date field can be
-            # added here; until then the today-filter falls back to all orders.
+            # Order date (YYYYMMDD). EMSX_DATE is the subscribable order-date field
+            # (confirmed via the subscription event schema). The CreateOrder request
+            # schema's date fields — EMSX_ORDER_CREATE_DATE, EMSX_AS_OF_DATE, and the
+            # *_TIME_MICROSEC forms — are NOT subscribable. Drives the today-only
+            # pick-up filter and the recap Date column.
+            "EMSX_DATE",
         ]
         self._issue_order_subscription()
 
@@ -222,10 +222,10 @@ class BloombergManager:
             bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
             notes = msg.getElementAsString("EMSX_NOTES") if msg.hasElement("EMSX_NOTES") else ""
-            # EMSX_AS_OF_DATE is already a YYYYMMDD integer — no conversion needed.
+            # EMSX_DATE is already a YYYYMMDD integer — no conversion needed.
             create_date = (
-                msg.getElementAsInteger("EMSX_AS_OF_DATE")
-                if msg.hasElement("EMSX_AS_OF_DATE") else 0
+                msg.getElementAsInteger("EMSX_DATE")
+                if msg.hasElement("EMSX_DATE") else 0
             )
 
             with self._order_lock:
