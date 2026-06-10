@@ -117,12 +117,12 @@ class BloombergManager:
             "EMSX_AVG_PRICE",
             # Full EATrade OrderId for de-duplication.
             "EMSX_NOTES",
-            # Order create date (YYYYMMDD) — the blotter's "Create Time" column maps
-            # to EMSX_AS_OF_DATE on this service (EMSX_ORDER_CREATE_DATE and the
-            # *_TIME_MICROSEC forms are rejected). Drives the today-only pick-up
-            # filter and the recap Date column. If rejected, the self-healing handler
-            # drops it and the pick-up falls back to including undated orders.
-            "EMSX_AS_OF_DATE",
+            # NOTE: no order create-date field yet. EMSX_ORDER_CREATE_DATE,
+            # EMSX_ORDER_CREATE_TIME_MICROSEC, and EMSX_AS_OF_DATE are all rejected
+            # as *subscription* fields on this service (they exist only in the
+            # CreateOrder *request* schema). log_subscription_schema() dumps the
+            # actual subscribable fields so the correct create-date field can be
+            # added here; until then the today-filter falls back to all orders.
         ]
         self._issue_order_subscription()
 

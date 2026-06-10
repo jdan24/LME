@@ -48,6 +48,43 @@ def log_order_schema() -> None:
         log.exception("Could not log CreateOrder schema")
 
 
+def log_subscription_schema() -> None:
+    """
+    Log the EMSX service's EVENT (subscription) schema — i.e. the fields that are
+    actually subscribable on the order topic. These differ from the CreateOrder
+    *request* schema: a field can be settable on an order yet not subscribable
+    (e.g. EMSX_ORDER_REF_ID, EMSX_AS_OF_DATE), which causes the whole subscription
+    to fail. Highlights date/time candidates so the order create-date field can be
+    identified without guessing from the request schema.
+    """
+    try:
+        svc = bbg.emsx_service
+        n = svc.numEventDefinitions()
+        names: set[str] = set()
+        for i in range(n):
+            _collect_field_names(svc.getEventDefinition(i), names, 0)
+        date_like = sorted(
+            f for f in names
+            if any(k in f.upper() for k in ("DATE", "TIME", "CREATE", "STAMP"))
+        )
+        log.info("EMSX subscription event definitions: %d", n)
+        log.info("Subscribable DATE/TIME field candidates: %s", date_like)
+        log.info("All subscribable fields (%d): %s", len(names), sorted(names))
+    except Exception:
+        log.exception("Could not log EMSX subscription schema")
+
+
+def _collect_field_names(elem_def, out: set, depth: int) -> None:
+    out.add(str(elem_def.name()))
+    if depth < 4:
+        try:
+            type_def = elem_def.typeDefinition()
+            for i in range(type_def.numElementDefinitions()):
+                _collect_field_names(type_def.getElementDefinition(i), out, depth + 1)
+        except Exception:
+            pass
+
+
 def _describe_schema(elem_def, lines: list[str], depth: int) -> None:
     type_def = elem_def.typeDefinition()
     try:
