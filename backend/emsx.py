@@ -121,8 +121,10 @@ def submit_order(order: dict) -> dict:
     _try_set(req, "EMSX_BROKER",           EMSX_BROKER)      # "WFGB" / "KMTF"
     _try_set(req, "EMSX_ACCOUNT",          EMSX_ACCOUNT)     # from .env
     _try_set(req, "EMSX_HAND_INSTRUCTION", EMSX_HAND_INSTR)  # "MAN"
-    # EATrade OrderId written to both: ORDER_REF_ID for reliable de-dup matching,
-    # NOTES so the trader sees it on the blotter.
+    # EATrade OrderId written to EMSX_NOTES — this carries the full id and is what
+    # de-dup matches on (it is also a valid subscription field). ORDER_REF_ID is
+    # set too as a visible reference, but the blotter truncates it and it is not a
+    # valid subscription field, so it is NOT used for matching.
     _try_set(req, "EMSX_NOTES",         order["orderId"])
     _try_set(req, "EMSX_ORDER_REF_ID",  order["orderId"])
 

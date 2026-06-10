@@ -107,7 +107,7 @@ async def check_duplicates_endpoint(body: DuplicateCheckRequest):
     if not bbg.connected:
         return {"duplicates": [], "checked": False}
 
-    existing = bbg.get_existing_order_refs(today_only=True)
+    existing = bbg.get_existing_order_refs()
     dupes = [oid for oid in body.orderIds if oid.strip() in existing]
     log.info(
         "Duplicate check: %d incoming ids, %d already in EMSX blotter",

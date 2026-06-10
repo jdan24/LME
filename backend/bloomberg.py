@@ -16,7 +16,7 @@ import blpapi
 import threading
 import queue
 import logging
-from datetime import datetime
+import re
 from typing import Any
 
 from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, REF_SERVICE
@@ -47,6 +47,12 @@ class BloombergManager:
         # Diagnostics: log the first subscription-data message type once, so we can
         # confirm order data is actually flowing (vs. a failed subscription).
         self._logged_sub_msgtype = False
+
+        # Order-subscription fields. Kept as state so that if EMSX rejects one as
+        # invalid, we can drop it and re-subscribe (self-healing — see
+        # _subscribe_emsx_orders / the SubscriptionFailure handler).
+        self._sub_fields: list[str] = []
+        self._sub_attempt = 0
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -94,23 +100,51 @@ class BloombergManager:
 
     def _subscribe_emsx_orders(self) -> None:
         """Subscribe to all EMSX orders so fill updates flow into the cache."""
-        subs = blpapi.SubscriptionList()
-        fields = [
+        # IMPORTANT: every field here must be a valid *subscription* field on the
+        # order topic. If even one is not, EMSX rejects the ENTIRE subscription
+        # (SubscriptionFailure: "Invalid field name detected") and no orders ever
+        # reach the cache. Note the subscription schema differs from the CreateOrder
+        # *request* schema — EMSX_ORDER_REF_ID is settable on an order but is NOT a
+        # valid subscription field (and is truncated in the blotter besides), so we
+        # de-dup on EMSX_NOTES, which carries the full EATrade OrderId.
+        #
+        # As a safety net, an invalid field reported via SubscriptionFailure is
+        # dropped and the subscription re-issued (see _resubscribe_dropping_field).
+        self._sub_fields = [
             "EMSX_SEQUENCE", "EMSX_STATUS", "EMSX_FILLED",
             "EMSX_AMOUNT", "EMSX_TICKER", "EMSX_SIDE",
             # Average fill price — populated as the order fills; used for the recap.
             "EMSX_AVG_PRICE",
-            # For de-duplication: the EATrade OrderId is written to both
-            # EMSX_ORDER_REF_ID and EMSX_NOTES; create-date scopes matches to today.
-            "EMSX_ORDER_REF_ID", "EMSX_NOTES", "EMSX_ORDER_CREATE_DATE",
+            # Full EATrade OrderId for de-duplication.
+            "EMSX_NOTES",
         ]
+        self._issue_order_subscription()
+
+    def _issue_order_subscription(self) -> None:
+        """(Re)subscribe to the EMSX order topic using the current field list."""
+        self._sub_attempt += 1
+        subs = blpapi.SubscriptionList()
         # Fields must be passed as a list argument, NOT embedded in the topic string.
         subs.add(
             f"{EMSX_SERVICE}/order",
-            fields,
-            correlationId=blpapi.CorrelationId("emsx_orders"),
+            self._sub_fields,
+            # Fresh correlation id per attempt so a re-subscribe never collides with
+            # the failed one. Dispatch routes order data by event type, not by cid.
+            correlationId=blpapi.CorrelationId(f"emsx_orders_{self._sub_attempt}"),
         )
+        log.info("Subscribing to EMSX orders with fields: %s", self._sub_fields)
         self._session.subscribe(subs)
+
+    def _resubscribe_dropping_field(self, bad_field: str) -> None:
+        """Drop an EMSX-rejected field and re-subscribe so the rest still flow."""
+        if bad_field not in self._sub_fields:
+            return  # not ours / already handled — avoid an infinite re-subscribe loop
+        self._sub_fields = [f for f in self._sub_fields if f != bad_field]
+        if not self._sub_fields:
+            log.error("All EMSX subscription fields were rejected; order cache will stay empty")
+            return
+        log.warning("Dropping invalid EMSX subscription field %r and re-subscribing", bad_field)
+        self._issue_order_subscription()
 
     # ------------------------------------------------------------------
     # Background event loop
@@ -148,6 +182,10 @@ class BloombergManager:
             msg_type = str(msg.messageType())
             if msg_type in ("SubscriptionFailure", "SubscriptionTerminated"):
                 log.warning("EMSX subscription %s: %s", msg_type, msg)
+                # "Invalid field name detected. Field=|EMSX_XXX|" — drop it and retry.
+                m = re.search(r"Field=\|([^|]+)\|", str(msg))
+                if m:
+                    self._resubscribe_dropping_field(m.group(1).strip())
             else:
                 log.info("EMSX subscription status: %s", msg_type)
             return
@@ -177,12 +215,7 @@ class BloombergManager:
             side_raw = msg.getElementAsString("EMSX_SIDE") if msg.hasElement("EMSX_SIDE") else "BUY"
             bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
-            ref_id = msg.getElementAsString("EMSX_ORDER_REF_ID") if msg.hasElement("EMSX_ORDER_REF_ID") else ""
-            notes  = msg.getElementAsString("EMSX_NOTES")        if msg.hasElement("EMSX_NOTES")        else ""
-            create_date = (
-                msg.getElementAsInteger("EMSX_ORDER_CREATE_DATE")
-                if msg.hasElement("EMSX_ORDER_CREATE_DATE") else 0
-            )
+            notes = msg.getElementAsString("EMSX_NOTES") if msg.hasElement("EMSX_NOTES") else ""
 
             with self._order_lock:
                 is_new = seq not in self._order_cache
@@ -194,15 +227,13 @@ class BloombergManager:
                     "lots": amount,
                     "ticker": ticker,
                     "bs": bs,
-                    "refId": ref_id,
                     "notes": notes,
-                    "createDate": create_date,
                 }
                 cache_size = len(self._order_cache)
             if is_new:
                 log.info(
-                    "Cached EMSX order seq=%d status=%s refId=%r notes=%r createDate=%s (cache size=%d)",
-                    seq, status, ref_id, notes, create_date, cache_size,
+                    "Cached EMSX order seq=%d status=%s notes=%r (cache size=%d)",
+                    seq, status, notes, cache_size,
                 )
         except Exception:
             log.exception("Failed to parse EMSX update message")
@@ -253,53 +284,40 @@ class BloombergManager:
         with self._order_lock:
             return [self._order_cache[s] for s in sequences if s in self._order_cache]
 
-    def get_existing_order_refs(self, today_only: bool = True) -> set[str]:
+    def get_existing_order_refs(self) -> set[str]:
         """
-        Return the set of order references currently in the EMSX blotter, used to
-        de-duplicate re-pasted EATrade orders. The EATrade OrderId is written to
-        both EMSX_ORDER_REF_ID and EMSX_NOTES, so both are collected.
-
-        When today_only is True, orders whose EMSX_ORDER_CREATE_DATE is known and
-        not today are excluded. Orders with an unknown create-date (0) are kept,
-        so de-dup still works if that field isn't delivered by the subscription.
+        Return the EATrade OrderIds currently in the EMSX blotter, used to
+        de-duplicate re-pasted orders. The OrderId is stored in EMSX_NOTES — the
+        full value (EMSX_ORDER_REF_ID is truncated in the blotter and is not a
+        valid subscription field). EATrade OrderIds are unique GUIDs, so a match
+        means the order has already been staged, regardless of day or status.
         """
-        today = int(datetime.now().strftime("%Y%m%d"))
         refs: set[str] = set()
-        excluded_by_date = 0
         with self._order_lock:
             cached_count = len(self._order_cache)
             for o in self._order_cache.values():
-                cd = o.get("createDate") or 0
-                if today_only and cd and cd != today:
-                    excluded_by_date += 1
-                    continue
-                for key in ("refId", "notes"):
-                    val = (o.get(key) or "").strip()
-                    if val:
-                        refs.add(val)
+                val = (o.get("notes") or "").strip()
+                if val:
+                    refs.add(val)
         log.info(
-            "Order-ref lookup: %d cached orders, %d refs collected, "
-            "%d excluded by create-date (today=%d, today_only=%s)",
-            cached_count, len(refs), excluded_by_date, today, today_only,
+            "Order-ref lookup: %d cached orders, %d OrderIds (EMSX_NOTES) collected",
+            cached_count, len(refs),
         )
         return refs
 
     def debug_cache_snapshot(self) -> dict:
         """Dump the EMSX order cache for diagnosing de-duplication. Read-only."""
-        today = int(datetime.now().strftime("%Y%m%d"))
         with self._order_lock:
             orders = [
                 {
                     "emsxSequence": o.get("emsxSequence"),
                     "status": o.get("status"),
                     "filledAmount": o.get("filledAmount"),
-                    "refId": o.get("refId"),
                     "notes": o.get("notes"),
-                    "createDate": o.get("createDate"),
                 }
                 for o in self._order_cache.values()
             ]
-        return {"today": today, "count": len(orders), "orders": orders}
+        return {"count": len(orders), "orders": orders}
 
 
 # Singleton instance — imported by main.py and emsx.py
