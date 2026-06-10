@@ -43,7 +43,7 @@ export async function getFillStatus(ids: number[]): Promise<{ fills: FillStatus[
   return request(`/fill-status?${params}`)
 }
 
-export async function getBlotterOrders(): Promise<{ orders: Array<FillStatus & { notes?: string }> }> {
+export async function getBlotterOrders(): Promise<{ orders: Array<FillStatus & { notes?: string; createDate?: number }> }> {
   return request('/blotter-orders')
 }
 

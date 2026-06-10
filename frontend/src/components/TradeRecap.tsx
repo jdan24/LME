@@ -51,16 +51,30 @@ function toTSV(rows: RecapRow[]): string {
   return `${header}\n${body}`
 }
 
-// Fixed-width aligned table for an email body (plain text, monospace-friendly).
-function toAlignedText(rows: RecapRow[]): string {
-  const cells: string[][] = [
-    [...COLUMNS],
-    ...rows.map((r) => [r.side, r.ticker, String(r.qty), formatPrice(r.price)]),
-  ]
-  const widths = COLUMNS.map((_, i) => Math.max(...cells.map((row) => row[i].length)))
-  return cells
-    .map((row) => row.map((cell, i) => cell.padEnd(widths[i])).join('   ').trimEnd())
-    .join('\n')
+// Bordered plain-text table for the email body — reads as a table in any client.
+function toBorderedTable(rows: RecapRow[]): string {
+  const headers = [...COLUMNS]
+  const data = rows.map((r) => [r.side, r.ticker, r.qty.toLocaleString(), formatPrice(r.price)])
+  const widths = headers.map((h, i) => Math.max(h.length, ...data.map((row) => row[i].length)))
+  const numeric = new Set([2, 3])  // Qty, Price — right-aligned
+  const border = '+' + widths.map((w) => '-'.repeat(w + 2)).join('+') + '+'
+  const fmt = (cells: string[]) =>
+    '| ' + cells.map((c, i) => (numeric.has(i) ? c.padStart(widths[i]) : c.padEnd(widths[i]))).join(' | ') + ' |'
+  return [border, fmt(headers), border, ...data.map(fmt), border].join('\n')
+}
+
+// Real HTML <table> so a clipboard paste lands as a table in Bloomberg chat /
+// Outlook / Excel rather than a blob of tab-separated text.
+function toHtml(rows: RecapRow[]): string {
+  const td = (v: string, align = 'left') => `<td align="${align}">${v}</td>`
+  const body = rows
+    .map((r) => `<tr>${td(r.side)}${td(r.ticker)}${td(r.qty.toLocaleString(), 'right')}${td(formatPrice(r.price), 'right')}</tr>`)
+    .join('')
+  return (
+    `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">` +
+    `<thead><tr><th>Side</th><th>Bloomberg Ticker</th><th>Qty</th><th>Price</th></tr></thead>` +
+    `<tbody>${body}</tbody></table>`
+  )
 }
 
 export function TradeRecap({ submittedOrders, fills }: Props) {
@@ -70,19 +84,31 @@ export function TradeRecap({ submittedOrders, fills }: Props) {
   if (rows.length === 0) return null
 
   const copyTable = async () => {
+    const tsv = toTSV(rows)
     try {
-      await navigator.clipboard.writeText(toTSV(rows))
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([toHtml(rows)], { type: 'text/html' }),
+          'text/plain': new Blob([tsv], { type: 'text/plain' }),
+        }),
+      ])
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
     } catch {
-      // Clipboard API can be blocked (e.g. file://) — fall back to a prompt.
-      window.prompt('Copy the trade recap:', toTSV(rows))
+      // Rich clipboard can be blocked (e.g. file://) — fall back to plain text.
+      try {
+        await navigator.clipboard.writeText(tsv)
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch {
+        window.prompt('Copy the trade recap:', tsv)
+      }
     }
   }
 
   const emailDraft = () => {
     const subject = `LME Trade Recap — ${new Date().toLocaleDateString()}`
-    const body = `Trade recap:\n\n${toAlignedText(rows)}\n`
+    const body = `Trade recap:\n\n${toBorderedTable(rows)}\n`
     window.location.href =
       `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }

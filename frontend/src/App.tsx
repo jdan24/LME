@@ -107,8 +107,16 @@ export default function App() {
   // throws if the bridge is unreachable, so the caller can show feedback.
   const handleMonitorBlotter = useCallback(async (): Promise<number> => {
     const { orders: blotter } = await getBlotterOrders()
-    // Active + filled LME orders; cancelled ones are excluded.
-    const lme = blotter.filter(o => isLmeTicker(o.ticker) && !/CANCEL/i.test(o.status))
+    // Today as YYYYMMDD (matches EMSX_ORDER_CREATE_DATE). Orders with no create
+    // date (0 — e.g. if EMSX didn't deliver the field) are kept rather than hidden.
+    const now = new Date()
+    const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate()
+    // Today's active + filled LME orders; cancelled and prior-day orders excluded.
+    const lme = blotter.filter(o =>
+      isLmeTicker(o.ticker) &&
+      !/CANCEL/i.test(o.status) &&
+      (!o.createDate || o.createDate === today)
+    )
     if (lme.length === 0) return 0
     const list: SubmittedOrder[] = lme.map(o => ({
       emsxSequence: o.emsxSequence,

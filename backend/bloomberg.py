@@ -117,6 +117,10 @@ class BloombergManager:
             "EMSX_AVG_PRICE",
             # Full EATrade OrderId for de-duplication.
             "EMSX_NOTES",
+            # Order create date (YYYYMMDD) — lets the blotter pick-up show today's
+            # orders only. If EMSX rejects it, the self-healing handler drops it and
+            # the pick-up filter falls back to including undated orders.
+            "EMSX_ORDER_CREATE_DATE",
         ]
         self._issue_order_subscription()
 
@@ -216,6 +220,10 @@ class BloombergManager:
             bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
             notes = msg.getElementAsString("EMSX_NOTES") if msg.hasElement("EMSX_NOTES") else ""
+            create_date = (
+                msg.getElementAsInteger("EMSX_ORDER_CREATE_DATE")
+                if msg.hasElement("EMSX_ORDER_CREATE_DATE") else 0
+            )
 
             with self._order_lock:
                 is_new = seq not in self._order_cache
@@ -228,6 +236,7 @@ class BloombergManager:
                     "ticker": ticker,
                     "bs": bs,
                     "notes": notes,
+                    "createDate": create_date,
                 }
                 cache_size = len(self._order_cache)
             if is_new:
