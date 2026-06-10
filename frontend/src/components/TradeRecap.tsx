@@ -23,12 +23,11 @@ interface RecapRow {
 
 const COLUMNS = ['Date', 'Side', 'Bloomberg Ticker', 'Qty', 'Price'] as const
 
+// Two decimals, no thousands separator (e.g. 7676.00, not 7,676.00) — pastes
+// cleanly into Bloomberg and keeps the recap numbers terse.
 function formatPrice(price: number): string {
   if (!price) return '—'
-  return price.toLocaleString('en-US', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  })
+  return price.toFixed(2)
 }
 
 // YYYYMMDD → MM/DD/YYYY. Falls back to today when the create date is unknown
@@ -102,9 +101,22 @@ function toHtml(rows: RecapRow[]): string {
 
 export function TradeRecap({ submittedOrders, fills }: Props) {
   const [copied, setCopied] = useState(false)
+  const [copiedPriceIdx, setCopiedPriceIdx] = useState<number | null>(null)
   const rows = buildRows(submittedOrders, fills)
 
   if (rows.length === 0) return null
+
+  // Copy a single fill price exactly as shown in the table (e.g. "7676.00").
+  const copyPrice = async (price: number, idx: number) => {
+    const text = formatPrice(price)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedPriceIdx(idx)
+      setTimeout(() => setCopiedPriceIdx((cur) => (cur === idx ? null : cur)), 1500)
+    } catch {
+      window.prompt('Copy price:', text)
+    }
+  }
 
   const copyTable = async () => {
     const tsv = toTSV(rows)
@@ -179,7 +191,21 @@ export function TradeRecap({ submittedOrders, fills }: Props) {
                 <td className="px-4 py-2 font-medium text-white">{r.side}</td>
                 <td className="px-4 py-2 font-mono text-white">{r.ticker}</td>
                 <td className="px-4 py-2 text-right font-mono text-white">{r.qty.toLocaleString()}</td>
-                <td className="px-4 py-2 text-right font-mono text-white">{formatPrice(r.price)}</td>
+                <td className="px-4 py-2 text-right font-mono text-white">
+                  <div className="flex items-center justify-end gap-1.5">
+                    <span>{formatPrice(r.price)}</span>
+                    {r.price > 0 && (
+                      <button
+                        onClick={() => copyPrice(r.price, i)}
+                        title="Copy price"
+                        aria-label="Copy price"
+                        className="text-slate-400 hover:text-white text-xs px-1 rounded hover:bg-slate-700 transition-colors"
+                      >
+                        {copiedPriceIdx === i ? '✓' : '⧉'}
+                      </button>
+                    )}
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
