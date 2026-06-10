@@ -126,7 +126,16 @@ async def blotter_orders_endpoint():
     """
     if not bbg.connected:
         raise HTTPException(503, "Bloomberg session not available")
-    return {"orders": bbg.get_all_cached_orders()}
+    orders = bbg.get_all_cached_orders()
+    # Diagnostic: the pick-up filters client-side on ticker/date/status, so log
+    # what the blotter actually contains to explain an empty pick-up.
+    log.info("Blotter pick-up requested: %d cached orders", len(orders))
+    for o in orders:
+        log.info(
+            "  blotter order: ticker=%r status=%r createDate=%s filled=%s",
+            o.get("ticker"), o.get("status"), o.get("createDate"), o.get("filledAmount"),
+        )
+    return {"orders": orders}
 
 
 @app.get("/api/debug/order-cache")

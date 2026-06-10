@@ -15,11 +15,15 @@ export function metalName(contract: string): string {
 }
 
 // True for a Bloomberg ticker that is an LME metal future (e.g. "LXN6 Comdty").
-// Used to filter the shared EMSX blotter down to LME orders.
+// Used to filter the shared EMSX blotter down to LME orders. The yellow key
+// (" Comdty") is optional because the EMSX subscription may return the bare
+// symbol (e.g. "LXN6") with the yellow key in a separate field.
 export function isLmeTicker(ticker: string): boolean {
-  if (!/ Comdty$/i.test(ticker)) return false
-  const prefix = ticker.trim().slice(0, 2).toUpperCase()
-  return Object.prototype.hasOwnProperty.call(METAL_PREFIXES, prefix)
+  const core = ticker.trim().toUpperCase().replace(/\s+COMDTY$/, '')
+  const prefix = core.slice(0, 2)
+  if (!Object.prototype.hasOwnProperty.call(METAL_PREFIXES, prefix)) return false
+  // PREFIX + month code + 1-or-2-digit year, e.g. "LXN6" or "LAU26".
+  return /^[A-Z]{2}[FGHJKMNQUVXZ]\d{1,2}$/.test(core)
 }
 
 // Bloomberg futures month codes

@@ -332,6 +332,11 @@ class BloombergManager:
                     "status": o.get("status"),
                     "filledAmount": o.get("filledAmount"),
                     "notes": o.get("notes"),
+                    "ticker": o.get("ticker"),
+                    "bs": o.get("bs"),
+                    "lots": o.get("lots"),
+                    "avgPrice": o.get("avgPrice"),
+                    "createDate": o.get("createDate"),
                 }
                 for o in self._order_cache.values()
             ]
