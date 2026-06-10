@@ -44,6 +44,10 @@ class BloombergManager:
         self._cid_counter = 0
         self._cid_lock = threading.Lock()
 
+        # Diagnostics: log the first subscription-data message type once, so we can
+        # confirm order data is actually flowing (vs. a failed subscription).
+        self._logged_sub_msgtype = False
+
     # ------------------------------------------------------------------
     # Lifecycle
     # ------------------------------------------------------------------
@@ -115,23 +119,41 @@ class BloombergManager:
     def _event_loop(self) -> None:
         while self._running:
             event = self._session.nextEvent(500)
-            if event.eventType() == blpapi.Event.TIMEOUT:
+            event_type = event.eventType()
+            if event_type == blpapi.Event.TIMEOUT:
                 continue
             for msg in event:
                 try:
-                    self._dispatch(event.eventType(), msg)
+                    self._dispatch(event_type, msg)
                 except Exception:
-                    log.exception("Error dispatching Bloomberg event")
+                    log.exception("Error dispatching Bloomberg event (eventType=%d)", event_type)
 
     def _dispatch(self, event_type: int, msg: blpapi.Message) -> None:
-        msg_type = str(msg.messageType())
-
-        # EMSX subscription updates — order/route fields from the exchange
-        if msg_type in ("OrderRouteFields", "Order", "Route"):
+        # EMSX order-subscription data. We branch on the EVENT type, not the
+        # message-type name: EMSX subscription-data messages do not carry a stable
+        # messageType across API versions, so filtering by name (the old approach)
+        # silently dropped every update and left the order cache empty. The only
+        # thing we subscribe to is the EMSX order topic, so every SUBSCRIPTION_DATA
+        # message is an order update; _handle_emsx_update guards on EMSX_SEQUENCE.
+        if event_type == blpapi.Event.SUBSCRIPTION_DATA:
+            if not self._logged_sub_msgtype:
+                log.info("First EMSX subscription-data message type: %s", msg.messageType())
+                self._logged_sub_msgtype = True
             self._handle_emsx_update(msg)
             return
 
-        # Request/response pair — wake up the waiting caller
+        # Subscription lifecycle — surface a failed/terminated order subscription
+        # (a failed topic resolve here is a reason the cache can stay empty).
+        if event_type == blpapi.Event.SUBSCRIPTION_STATUS:
+            msg_type = str(msg.messageType())
+            if msg_type in ("SubscriptionFailure", "SubscriptionTerminated"):
+                log.warning("EMSX subscription %s: %s", msg_type, msg)
+            else:
+                log.info("EMSX subscription status: %s", msg_type)
+            return
+
+        # Everything else (RESPONSE / PARTIAL_RESPONSE) — wake the waiting caller
+        # keyed by correlation id.
         for cid in msg.correlationIds():
             val = cid.value()
             with self._pending_lock:
@@ -163,6 +185,7 @@ class BloombergManager:
             )
 
             with self._order_lock:
+                is_new = seq not in self._order_cache
                 self._order_cache[seq] = {
                     "emsxSequence": seq,
                     "status": status,
@@ -175,6 +198,12 @@ class BloombergManager:
                     "notes": notes,
                     "createDate": create_date,
                 }
+                cache_size = len(self._order_cache)
+            if is_new:
+                log.info(
+                    "Cached EMSX order seq=%d status=%s refId=%r notes=%r createDate=%s (cache size=%d)",
+                    seq, status, ref_id, notes, create_date, cache_size,
+                )
         except Exception:
             log.exception("Failed to parse EMSX update message")
 
