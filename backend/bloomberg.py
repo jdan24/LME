@@ -17,36 +17,11 @@ import threading
 import queue
 import logging
 import re
-from datetime import datetime
 from typing import Any
 
 from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, REF_SERVICE
 
 log = logging.getLogger(__name__)
-
-
-def _epoch_to_yyyymmdd(value: int) -> int:
-    """
-    Convert an EMSX epoch timestamp to a local-date YYYYMMDD integer (0 if unknown).
-    EMSX *_TIME_MICROSEC fields are microseconds since the Unix epoch, but we
-    normalize by magnitude so seconds/millis/micros all work. Values too small to
-    be an epoch time (e.g. a time-of-day-only field) yield 0.
-    """
-    if not value or value <= 0:
-        return 0
-    if value >= 1_000_000_000_000_000:      # microseconds (~1e15 for modern dates)
-        secs = value / 1_000_000
-    elif value >= 1_000_000_000_000:        # milliseconds
-        secs = value / 1_000
-    elif value >= 1_000_000_000:            # seconds
-        secs = float(value)
-    else:
-        return 0
-    try:
-        dt = datetime.fromtimestamp(secs)
-        return dt.year * 10000 + dt.month * 100 + dt.day
-    except Exception:
-        return 0
 
 
 class BloombergManager:
@@ -142,12 +117,12 @@ class BloombergManager:
             "EMSX_AVG_PRICE",
             # Full EATrade OrderId for de-duplication.
             "EMSX_NOTES",
-            # Order create timestamp (epoch microseconds) — lets the blotter pick-up
-            # show today's orders only and drives the recap Date column. EMSX rejects
-            # EMSX_ORDER_CREATE_DATE on this service, so we use the *_TIME_MICROSEC
-            # form. If this is rejected too, the self-healing handler drops it and the
-            # pick-up filter falls back to including undated orders.
-            "EMSX_ORDER_CREATE_TIME_MICROSEC",
+            # Order create date (YYYYMMDD) — the blotter's "Create Time" column maps
+            # to EMSX_AS_OF_DATE on this service (EMSX_ORDER_CREATE_DATE and the
+            # *_TIME_MICROSEC forms are rejected). Drives the today-only pick-up
+            # filter and the recap Date column. If rejected, the self-healing handler
+            # drops it and the pick-up falls back to including undated orders.
+            "EMSX_AS_OF_DATE",
         ]
         self._issue_order_subscription()
 
@@ -247,11 +222,11 @@ class BloombergManager:
             bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
             notes = msg.getElementAsString("EMSX_NOTES") if msg.hasElement("EMSX_NOTES") else ""
-            create_micros = (
-                msg.getElementAsInteger("EMSX_ORDER_CREATE_TIME_MICROSEC")
-                if msg.hasElement("EMSX_ORDER_CREATE_TIME_MICROSEC") else 0
+            # EMSX_AS_OF_DATE is already a YYYYMMDD integer — no conversion needed.
+            create_date = (
+                msg.getElementAsInteger("EMSX_AS_OF_DATE")
+                if msg.hasElement("EMSX_AS_OF_DATE") else 0
             )
-            create_date = _epoch_to_yyyymmdd(create_micros)
 
             with self._order_lock:
                 is_new = seq not in self._order_cache
