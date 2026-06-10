@@ -73,18 +73,6 @@ function toTSV(rows: RecapRow[]): string {
   return `${header}\n${body}`
 }
 
-// Bordered plain-text table for the email body — reads as a table in any client.
-function toBorderedTable(rows: RecapRow[]): string {
-  const headers = [...COLUMNS]
-  const data = rows.map(rowCells)
-  const widths = headers.map((h, i) => Math.max(h.length, ...data.map((row) => row[i].length)))
-  const numeric = new Set([3, 4])  // Qty, Price — right-aligned
-  const border = '+' + widths.map((w) => '-'.repeat(w + 2)).join('+') + '+'
-  const fmt = (cells: string[]) =>
-    '| ' + cells.map((c, i) => (numeric.has(i) ? c.padStart(widths[i]) : c.padEnd(widths[i]))).join(' | ') + ' |'
-  return [border, fmt(headers), border, ...data.map(fmt), border].join('\n')
-}
-
 // Real HTML <table> so a clipboard paste lands as a table in Bloomberg chat /
 // Outlook / Excel rather than a blob of tab-separated text.
 function toHtml(rows: RecapRow[]): string {
@@ -143,7 +131,9 @@ export function TradeRecap({ submittedOrders, fills }: Props) {
 
   const emailDraft = () => {
     const subject = `LME Trade Recap — ${new Date().toLocaleDateString()}`
-    const body = `Trade recap:\n\n${toBorderedTable(rows)}\n`
+    // Experimental: use the HTML table in the body. Note a mailto body is plain
+    // text, so Outlook may show raw <table> tags rather than a rendered table.
+    const body = `Trade recap:\n\n${toHtml(rows)}\n`
     window.location.href =
       `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
   }
