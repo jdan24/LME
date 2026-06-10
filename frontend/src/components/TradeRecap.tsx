@@ -14,13 +14,14 @@ interface Props {
 }
 
 interface RecapRow {
+  date: string
   side: 'BUY' | 'SELL'
   ticker: string
   qty: number
   price: number
 }
 
-const COLUMNS = ['Side', 'Bloomberg Ticker', 'Qty', 'Price'] as const
+const COLUMNS = ['Date', 'Side', 'Bloomberg Ticker', 'Qty', 'Price'] as const
 
 function formatPrice(price: number): string {
   if (!price) return '—'
@@ -30,6 +31,19 @@ function formatPrice(price: number): string {
   })
 }
 
+// YYYYMMDD → MM/DD/YYYY. Falls back to today when the create date is unknown
+// (e.g. EMSX didn't deliver the create-time field) — recaps are same-day.
+function formatDate(yyyymmdd: number): string {
+  const s = String(yyyymmdd)
+  if (yyyymmdd && s.length === 8) {
+    return `${s.slice(4, 6)}/${s.slice(6, 8)}/${s.slice(0, 4)}`
+  }
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${mm}/${dd}/${d.getFullYear()}`
+}
+
 // Builds the recap from each order that has at least one fill. Quantity reflects
 // the filled amount (not the ordered amount) and price is the EMSX average fill.
 function buildRows(submittedOrders: SubmittedOrder[], fills: FillStatus[]): RecapRow[] {
@@ -37,26 +51,35 @@ function buildRows(submittedOrders: SubmittedOrder[], fills: FillStatus[]): Reca
     .map((o) => {
       const fill = fills.find((f) => f.emsxSequence === o.emsxSequence)
       const qty = fill?.filledAmount ?? 0
-      return { side: o.bs, ticker: o.ticker, qty, price: fill?.avgPrice ?? 0 }
+      return {
+        date: formatDate(fill?.createDate ?? 0),
+        side: o.bs,
+        ticker: o.ticker,
+        qty,
+        price: fill?.avgPrice ?? 0,
+      }
     })
     .filter((r) => r.qty > 0)
+}
+
+// Cells for one row, in COLUMNS order.
+function rowCells(r: RecapRow): string[] {
+  return [r.date, r.side, r.ticker, r.qty.toLocaleString(), formatPrice(r.price)]
 }
 
 // Tab-separated value text — pastes cleanly into Excel / Bloomberg / Outlook.
 function toTSV(rows: RecapRow[]): string {
   const header = COLUMNS.join('\t')
-  const body = rows
-    .map((r) => [r.side, r.ticker, r.qty, formatPrice(r.price)].join('\t'))
-    .join('\n')
+  const body = rows.map((r) => rowCells(r).join('\t')).join('\n')
   return `${header}\n${body}`
 }
 
 // Bordered plain-text table for the email body — reads as a table in any client.
 function toBorderedTable(rows: RecapRow[]): string {
   const headers = [...COLUMNS]
-  const data = rows.map((r) => [r.side, r.ticker, r.qty.toLocaleString(), formatPrice(r.price)])
+  const data = rows.map(rowCells)
   const widths = headers.map((h, i) => Math.max(h.length, ...data.map((row) => row[i].length)))
-  const numeric = new Set([2, 3])  // Qty, Price — right-aligned
+  const numeric = new Set([3, 4])  // Qty, Price — right-aligned
   const border = '+' + widths.map((w) => '-'.repeat(w + 2)).join('+') + '+'
   const fmt = (cells: string[]) =>
     '| ' + cells.map((c, i) => (numeric.has(i) ? c.padStart(widths[i]) : c.padEnd(widths[i]))).join(' | ') + ' |'
@@ -68,11 +91,11 @@ function toBorderedTable(rows: RecapRow[]): string {
 function toHtml(rows: RecapRow[]): string {
   const td = (v: string, align = 'left') => `<td align="${align}">${v}</td>`
   const body = rows
-    .map((r) => `<tr>${td(r.side)}${td(r.ticker)}${td(r.qty.toLocaleString(), 'right')}${td(formatPrice(r.price), 'right')}</tr>`)
+    .map((r) => `<tr>${td(r.date)}${td(r.side)}${td(r.ticker)}${td(r.qty.toLocaleString(), 'right')}${td(formatPrice(r.price), 'right')}</tr>`)
     .join('')
   return (
     `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">` +
-    `<thead><tr><th>Side</th><th>Bloomberg Ticker</th><th>Qty</th><th>Price</th></tr></thead>` +
+    `<thead><tr><th>Date</th><th>Side</th><th>Bloomberg Ticker</th><th>Qty</th><th>Price</th></tr></thead>` +
     `<tbody>${body}</tbody></table>`
   )
 }
@@ -142,6 +165,7 @@ export function TradeRecap({ submittedOrders, fills }: Props) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-800 text-slate-400 text-left">
+              <th className="px-4 py-2 font-medium">Date</th>
               <th className="px-4 py-2 font-medium">Side</th>
               <th className="px-4 py-2 font-medium">Bloomberg Ticker</th>
               <th className="px-4 py-2 font-medium text-right">Qty</th>
@@ -151,6 +175,7 @@ export function TradeRecap({ submittedOrders, fills }: Props) {
           <tbody>
             {rows.map((r, i) => (
               <tr key={i} className="border-t border-slate-700">
+                <td className="px-4 py-2 font-mono text-white">{r.date}</td>
                 <td className="px-4 py-2 font-medium text-white">{r.side}</td>
                 <td className="px-4 py-2 font-mono text-white">{r.ticker}</td>
                 <td className="px-4 py-2 text-right font-mono text-white">{r.qty.toLocaleString()}</td>

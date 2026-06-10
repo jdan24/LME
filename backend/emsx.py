@@ -199,5 +199,6 @@ def get_fill_status(sequences: list[int]) -> list[dict]:
                 "lots": 0,
                 "ticker": "",
                 "bs": "",
+                "createDate": 0,
             })
     return results

@@ -22,6 +22,7 @@ export interface FillStatus {
   filledAmount: number
   avgPrice: number
   status: string
+  createDate: number   // order create date as YYYYMMDD (0 if unknown)
 }
 
 export interface SettlementPrice {
