@@ -109,7 +109,19 @@ async def check_duplicates_endpoint(body: DuplicateCheckRequest):
 
     existing = bbg.get_existing_order_refs(today_only=True)
     dupes = [oid for oid in body.orderIds if oid.strip() in existing]
+    log.info(
+        "Duplicate check: %d incoming ids, %d already in EMSX blotter",
+        len(body.orderIds), len(dupes),
+    )
     return {"duplicates": dupes, "checked": True}
+
+
+@app.get("/api/debug/order-cache")
+async def order_cache_debug():
+    """Snapshot of the EMSX order subscription cache, for diagnosing de-dup."""
+    if not bbg.connected:
+        raise HTTPException(503, "Bloomberg session not available")
+    return bbg.debug_cache_snapshot()
 
 
 @app.post("/api/submit-orders")

@@ -68,7 +68,7 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
           <thead>
             <tr className="bg-slate-800 text-slate-400 text-left">
               <th className="px-4 py-3 font-medium">Seq #</th>
-              <th className="px-4 py-3 font-medium">Contract</th>
+              <th className="px-4 py-3 font-medium">Symbol</th>
               <th className="px-4 py-3 font-medium">Side</th>
               <th className="px-4 py-3 font-medium text-right">Ordered</th>
               <th className="px-4 py-3 font-medium text-right">Filled</th>
@@ -86,7 +86,7 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
                 <tr key={o.emsxSequence} className="border-t border-slate-700">
                   <td className="px-4 py-3 font-mono text-slate-400 text-xs">{o.emsxSequence}</td>
                   <td className="px-4 py-3">
-                    <div className="text-white font-medium">{contractFromTicker(o.ticker)}</div>
+                    <div className="font-mono text-white">{o.ticker}</div>
                     <div className="text-slate-500 text-xs">{contractLabel(contractFromTicker(o.ticker))}</div>
                   </td>
                   <td className="px-4 py-3">

@@ -107,11 +107,8 @@ export function SettlementPanel({ tickers }: Props) {
             return (
               <div key={s.ticker} className={`px-4 py-3 flex items-center gap-4 ${cfg.rowCls}`}>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-white font-medium">{s.contract}</span>
-                    <span className="text-slate-500 text-xs">{contractLabel(s.contract)}</span>
-                  </div>
-                  <div className="text-slate-400 text-xs font-mono">{s.ticker}</div>
+                  <div className="text-white font-mono font-medium">{s.ticker}</div>
+                  <div className="text-slate-500 text-xs">{contractLabel(s.contract)}</div>
                 </div>
                 <div className="text-right min-w-[120px]">
                   <div className="text-white text-lg font-mono font-semibold">

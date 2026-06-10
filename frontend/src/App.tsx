@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import type { Order, AppState, AppConfig } from './types'
 import { PasteArea } from './components/PasteArea'
 import { OrderTable } from './components/OrderTable'
@@ -25,7 +25,12 @@ export default function App() {
   const [submitted, setSubmitted] = useState<SubmittedOrder[]>([])
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [dupChecking, setDupChecking] = useState(false)
   const [config, setConfig] = useState<AppConfig | null>(null)
+
+  // Identifies the current import batch so retries from a previous import (or a
+  // reset) can be discarded when a newer import supersedes them.
+  const dupBatchRef = useRef(0)
 
   useEffect(() => {
     getConfig()
@@ -33,6 +38,45 @@ export default function App() {
       .catch(() => {
         // Backend not reachable yet — show placeholder; will retry on next action
       })
+  }, [])
+
+  // De-dup against EMSX. The order blotter streams into the backend cache
+  // asynchronously and can take several seconds to finish its initial load after
+  // a bridge restart, so a single check on import can run before the blotter is
+  // there. We check immediately, then re-check a few times to catch orders that
+  // arrive late. Results are merged (union) so a flag is never lost between tries.
+  const runDupCheck = useCallback((ids: string[]) => {
+    if (ids.length === 0) return
+    const batch = ++dupBatchRef.current
+    setDupChecking(true)
+
+    const attempt = (delays: number[]) => {
+      checkDuplicates(ids)
+        .then(({ duplicates, checked }) => {
+          if (dupBatchRef.current !== batch) return  // superseded by a newer import/reset
+          setDupChecked(checked)
+          if (duplicates.length > 0) {
+            setDuplicateIds(prev => {
+              const next = new Set(prev)
+              duplicates.forEach(d => next.add(d))
+              return next
+            })
+          }
+          if (delays.length > 0) {
+            const [first, ...rest] = delays
+            setTimeout(() => { if (dupBatchRef.current === batch) attempt(rest) }, first)
+          } else {
+            setDupChecking(false)
+          }
+        })
+        .catch(() => {
+          if (dupBatchRef.current !== batch) return
+          setDupChecked(false)
+          setDupChecking(false)
+        })
+    }
+
+    attempt([2500, 4000, 6000])
   }, [])
 
   const handleParsed = useCallback((parsed: Order[], errors: string[]) => {
@@ -46,23 +90,24 @@ export default function App() {
     setAppState(parsed.length > 0 ? 'REVIEW' : 'EMPTY')
     setSubmitError(null)
 
-    // De-dup: ask the backend which OrderIds are already in today's EMSX blotter
     if (parsed.length > 0) {
-      const ids = parsed.map(o => o.orderId).filter(Boolean)
-      checkDuplicates(ids)
-        .then(({ duplicates, checked }) => {
-          setDuplicateIds(new Set(duplicates))
-          setDupChecked(checked)
-        })
-        .catch(() => setDupChecked(false))
+      runDupCheck(parsed.map(o => o.orderId).filter(Boolean))
     }
-  }, [])
+  }, [runDupCheck])
+
+  // Manual re-check — lets the trader force a fresh EMSX lookup once the blotter
+  // has finished loading, without re-importing.
+  const recheckDuplicates = useCallback(() => {
+    runDupCheck(orders.map(o => o.orderId).filter(Boolean))
+  }, [orders, runDupCheck])
 
   const handleReset = useCallback(() => {
+    dupBatchRef.current++  // cancel any in-flight retry loop
     setOrders([])
     setSelected([])
     setDuplicateIds(new Set())
     setDupChecked(true)
+    setDupChecking(false)
     setParseErrors([])
     setSubmitted([])
     setSubmitError(null)
@@ -141,9 +186,11 @@ export default function App() {
             selected={selected}
             duplicateIds={duplicateIds}
             dupChecked={dupChecked}
+            dupChecking={dupChecking}
             onToggle={toggleRow}
             onSelectAll={selectAll}
             onSelectNone={selectNone}
+            onRecheckDuplicates={recheckDuplicates}
           />
 
           {submitError && (

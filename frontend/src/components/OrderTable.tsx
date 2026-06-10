@@ -10,9 +10,11 @@ interface Props {
   selected: boolean[]
   duplicateIds: Set<string>
   dupChecked: boolean
+  dupChecking: boolean
   onToggle: (index: number) => void
   onSelectAll: () => void
   onSelectNone: () => void
+  onRecheckDuplicates: () => void
 }
 
 function formatTime(iso: string): string {
@@ -24,8 +26,8 @@ function formatTime(iso: string): string {
 }
 
 export function OrderTable({
-  orders, errors, config, selected, duplicateIds, dupChecked,
-  onToggle, onSelectAll, onSelectNone,
+  orders, errors, config, selected, duplicateIds, dupChecked, dupChecking,
+  onToggle, onSelectAll, onSelectNone, onRecheckDuplicates,
 }: Props) {
   const account = config?.account ?? '—'
   const broker  = config?.broker  ?? '—'
@@ -53,7 +55,7 @@ export function OrderTable({
         </div>
       )}
 
-      {dupCheckBanner(dupChecked, dupCount)}
+      {dupCheckBanner(dupChecked, dupChecking, dupCount, onRecheckDuplicates)}
 
       <div className="mb-3 flex items-center gap-3 flex-wrap">
         <span className="text-slate-400 text-sm">
@@ -96,8 +98,7 @@ export function OrderTable({
                 />
               </th>
               <th className="px-4 py-3 font-medium">#</th>
-              <th className="px-4 py-3 font-medium">Contract</th>
-              <th className="px-4 py-3 font-medium">Ticker (EMSX)</th>
+              <th className="px-4 py-3 font-medium">Symbol</th>
               <th className="px-4 py-3 font-medium">Side</th>
               <th className="px-4 py-3 font-medium text-right">Lots</th>
               <th className="px-4 py-3 font-medium">Order ID</th>
@@ -134,8 +135,8 @@ export function OrderTable({
                   </td>
                   <td className="px-4 py-3 text-slate-500">{i + 1}</td>
                   <td className="px-4 py-3">
-                    <div className="font-medium text-white flex items-center gap-2">
-                      {o.contract}
+                    <div className="font-mono text-blue-300 flex items-center gap-2">
+                      {o.ticker}
                       {isDuplicate && (
                         <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-900/60 text-amber-300 border border-amber-600">
                           ⚠ IN EMSX
@@ -144,7 +145,6 @@ export function OrderTable({
                     </div>
                     <div className="text-slate-500 text-xs">{contractLabel(o.contract)}</div>
                   </td>
-                  <td className="px-4 py-3 font-mono text-blue-300">{o.ticker}</td>
                   <td className="px-4 py-3">
                     <span className={`inline-flex px-2 py-0.5 rounded text-xs font-bold ${
                       o.bs === 'BUY'
@@ -174,20 +174,49 @@ export function OrderTable({
   )
 }
 
-function dupCheckBanner(dupChecked: boolean, dupCount: number) {
+function dupCheckBanner(
+  dupChecked: boolean,
+  dupChecking: boolean,
+  dupCount: number,
+  onRecheck: () => void,
+) {
+  const recheckBtn = (
+    <button
+      onClick={onRecheck}
+      disabled={dupChecking}
+      className="ml-2 px-2 py-0.5 rounded bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-xs font-medium disabled:opacity-50 inline-flex items-center gap-1.5"
+    >
+      {dupChecking && (
+        <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+      )}
+      {dupChecking ? 'Checking…' : 'Re-check EMSX'}
+    </button>
+  )
+
   if (!dupChecked) {
     return (
-      <div className="mb-3 bg-slate-800/60 border border-slate-600 rounded-lg p-2 text-slate-400 text-xs">
-        Duplicate check skipped — Bloomberg bridge not reachable. Imported orders were not checked against EMSX.
+      <div className="mb-3 bg-slate-800/60 border border-slate-600 rounded-lg p-2 text-slate-400 text-xs flex items-center">
+        <span>Duplicate check skipped — Bloomberg bridge not reachable. Imported orders were not checked against EMSX.</span>
+        {recheckBtn}
       </div>
     )
   }
   if (dupCount > 0) {
     return (
-      <div className="mb-3 bg-amber-900/30 border border-amber-600 rounded-lg p-2 text-amber-300 text-xs">
-        {dupCount} order{dupCount !== 1 ? 's' : ''} already in today's EMSX blotter — flagged and left unselected. Re-check a row only if you intend to stage it again.
+      <div className="mb-3 bg-amber-900/30 border border-amber-600 rounded-lg p-2 text-amber-300 text-xs flex items-center">
+        <span>{dupCount} order{dupCount !== 1 ? 's' : ''} already in today's EMSX blotter — flagged and left unselected. Re-check a row only if you intend to stage it again.</span>
+        {recheckBtn}
       </div>
     )
   }
-  return null
+  return (
+    <div className="mb-3 bg-slate-800/60 border border-slate-700 rounded-lg p-2 text-slate-400 text-xs flex items-center">
+      <span>
+        {dupChecking
+          ? 'Checking imported orders against the EMSX blotter…'
+          : 'No duplicates found in today’s EMSX blotter. If the blotter was still loading, re-check.'}
+      </span>
+      {recheckBtn}
+    </div>
+  )
 }

@@ -236,16 +236,41 @@ class BloombergManager:
         """
         today = int(datetime.now().strftime("%Y%m%d"))
         refs: set[str] = set()
+        excluded_by_date = 0
         with self._order_lock:
+            cached_count = len(self._order_cache)
             for o in self._order_cache.values():
                 cd = o.get("createDate") or 0
                 if today_only and cd and cd != today:
+                    excluded_by_date += 1
                     continue
                 for key in ("refId", "notes"):
                     val = (o.get(key) or "").strip()
                     if val:
                         refs.add(val)
+        log.info(
+            "Order-ref lookup: %d cached orders, %d refs collected, "
+            "%d excluded by create-date (today=%d, today_only=%s)",
+            cached_count, len(refs), excluded_by_date, today, today_only,
+        )
         return refs
+
+    def debug_cache_snapshot(self) -> dict:
+        """Dump the EMSX order cache for diagnosing de-duplication. Read-only."""
+        today = int(datetime.now().strftime("%Y%m%d"))
+        with self._order_lock:
+            orders = [
+                {
+                    "emsxSequence": o.get("emsxSequence"),
+                    "status": o.get("status"),
+                    "filledAmount": o.get("filledAmount"),
+                    "refId": o.get("refId"),
+                    "notes": o.get("notes"),
+                    "createDate": o.get("createDate"),
+                }
+                for o in self._order_cache.values()
+            ]
+        return {"today": today, "count": len(orders), "orders": orders}
 
 
 # Singleton instance — imported by main.py and emsx.py
