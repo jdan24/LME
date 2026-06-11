@@ -39,6 +39,7 @@ export interface AppConfig {
   orderType: string
   tif: string
   handlingInstr: string
+  environment: 'PROD' | 'UAT'
 }
 
 export type AppState =

@@ -31,7 +31,7 @@ export async function submitOrders(orders: Order[]): Promise<{ results: Array<{ 
   })
 }
 
-export async function checkDuplicates(orderIds: string[]): Promise<{ duplicates: string[]; checked: boolean }> {
+export async function checkDuplicates(orderIds: string[]): Promise<{ duplicates: string[]; checked: boolean; statuses: Record<string, string> }> {
   return request('/check-duplicates', {
     method: 'POST',
     body: JSON.stringify({ orderIds }),

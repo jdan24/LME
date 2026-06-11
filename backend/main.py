@@ -88,12 +88,14 @@ async def health():
 @app.get("/api/config")
 async def get_config():
     """Returns display-only order config for the frontend. Values come from .env."""
+    environment = "PROD" if EMSX_SERVICE == "//blp/emapisvc" else "UAT"
     return {
         "account": EMSX_ACCOUNT,
         "broker": EMSX_BROKER,
         "orderType": EMSX_ORDER_TYPE,
         "tif": EMSX_TIF,
         "handlingInstr": EMSX_HAND_INSTR,
+        "environment": environment,
     }
 
 
@@ -106,15 +108,16 @@ async def check_duplicates_endpoint(body: DuplicateCheckRequest):
     importing still works offline.
     """
     if not bbg.connected:
-        return {"duplicates": [], "checked": False}
+        return {"duplicates": [], "checked": False, "statuses": {}}
 
-    existing = bbg.get_existing_order_refs()
+    existing = bbg.get_order_refs_with_status()
     dupes = [oid for oid in body.orderIds if oid.strip() in existing]
+    statuses = {oid: existing[oid.strip()] for oid in dupes if oid.strip() in existing}
     log.info(
         "Duplicate check: %d incoming ids, %d already in EMSX blotter",
         len(body.orderIds), len(dupes),
     )
-    return {"duplicates": dupes, "checked": True}
+    return {"duplicates": dupes, "checked": True, "statuses": statuses}
 
 
 @app.get("/api/blotter-orders")

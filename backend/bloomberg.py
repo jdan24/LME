@@ -302,6 +302,16 @@ class BloombergManager:
         with self._order_lock:
             return list(self._order_cache.values())
 
+    def get_order_refs_with_status(self) -> dict[str, str]:
+        """Return {orderId: status} for all EMSX_NOTES values in the cache."""
+        result: dict[str, str] = {}
+        with self._order_lock:
+            for o in self._order_cache.values():
+                val = (o.get("notes") or "").strip()
+                if val:
+                    result[val] = o.get("status", "")
+        return result
+
     def get_existing_order_refs(self) -> set[str]:
         """
         Return the EATrade OrderIds currently in the EMSX blotter, used to

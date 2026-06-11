@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { Order, AppConfig } from '../types'
 import { contractLabel } from '../utils/lmeConfig'
 import { OrderSummary } from './OrderSummary'
+import { StatusBadge } from './StatusBadge'
 
 interface Props {
   orders: Order[]
@@ -9,6 +10,7 @@ interface Props {
   config: AppConfig | null
   selected: boolean[]
   duplicateIds: Set<string>
+  duplicateStatuses: Record<string, string>
   dupChecked: boolean
   dupChecking: boolean
   onToggle: (index: number) => void
@@ -26,7 +28,7 @@ function formatTime(iso: string): string {
 }
 
 export function OrderTable({
-  orders, errors, config, selected, duplicateIds, dupChecked, dupChecking,
+  orders, errors, config, selected, duplicateIds, duplicateStatuses, dupChecked, dupChecking,
   onToggle, onSelectAll, onSelectNone, onRecheckDuplicates,
 }: Props) {
   const account = config?.account ?? '—'
@@ -104,6 +106,7 @@ export function OrderTable({
               <th className="px-4 py-3 font-medium">Type</th>
               <th className="px-4 py-3 font-medium">Broker</th>
               <th className="px-4 py-3 font-medium">Account</th>
+              <th className="px-4 py-3 font-medium">EMSX Status</th>
             </tr>
           </thead>
           <tbody>
@@ -158,6 +161,12 @@ export function OrderTable({
                   <td className="px-4 py-3 text-slate-400 text-xs">MOC / DAY</td>
                   <td className="px-4 py-3 text-slate-400 text-xs font-mono">{broker}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs font-mono">{account}</td>
+                  <td className="px-4 py-3">
+                    {isDuplicate && duplicateStatuses[o.orderId]
+                      ? <StatusBadge status={duplicateStatuses[o.orderId]} />
+                      : <span className="text-slate-600 text-xs">—</span>
+                    }
+                  </td>
                 </tr>
               )
             })}

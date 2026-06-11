@@ -5,6 +5,7 @@ import { OrderTable } from './components/OrderTable'
 import { SubmitControls } from './components/SubmitControls'
 import { FillStatus } from './components/FillStatus'
 import { SettlementPanel } from './components/SettlementPanel'
+import { EnvironmentBanner } from './components/EnvironmentBanner'
 import { submitOrders, getConfig, checkDuplicates, getBlotterOrders } from './api/client'
 import { isLmeTicker } from './utils/lmeConfig'
 
@@ -27,6 +28,7 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [dupChecking, setDupChecking] = useState(false)
+  const [duplicateStatuses, setDuplicateStatuses] = useState<Record<string, string>>({})
   const [config, setConfig] = useState<AppConfig | null>(null)
 
   // Identifies the current import batch so retries from a previous import (or a
@@ -53,7 +55,7 @@ export default function App() {
 
     const attempt = (delays: number[]) => {
       checkDuplicates(ids)
-        .then(({ duplicates, checked }) => {
+        .then(({ duplicates, checked, statuses }) => {
           if (dupBatchRef.current !== batch) return  // superseded by a newer import/reset
           setDupChecked(checked)
           if (duplicates.length > 0) {
@@ -62,6 +64,9 @@ export default function App() {
               duplicates.forEach(d => next.add(d))
               return next
             })
+            if (statuses && Object.keys(statuses).length > 0) {
+              setDuplicateStatuses(prev => ({ ...prev, ...statuses }))
+            }
           }
           if (delays.length > 0) {
             const [first, ...rest] = delays
@@ -86,6 +91,7 @@ export default function App() {
     // All rows start UNCHECKED — the user explicitly selects which to submit
     setSelected(new Array(parsed.length).fill(false))
     setDuplicateIds(new Set())
+    setDuplicateStatuses({})
     setDupChecked(true)
     setParseErrors(errors)
     setAppState(parsed.length > 0 ? 'REVIEW' : 'EMPTY')
@@ -135,6 +141,7 @@ export default function App() {
     setOrders([])
     setSelected([])
     setDuplicateIds(new Set())
+    setDuplicateStatuses({})
     setDupChecked(true)
     setDupChecking(false)
     setParseErrors([])
@@ -186,6 +193,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-slate-900">
+      {config && <EnvironmentBanner environment={config.environment} />}
+
       {appState === 'EMPTY' && (
         <PasteArea onParsed={handleParsed} onMonitorBlotter={handleMonitorBlotter} />
       )}
@@ -214,6 +223,7 @@ export default function App() {
             config={config}
             selected={selected}
             duplicateIds={duplicateIds}
+            duplicateStatuses={duplicateStatuses}
             dupChecked={dupChecked}
             dupChecking={dupChecking}
             onToggle={toggleRow}
