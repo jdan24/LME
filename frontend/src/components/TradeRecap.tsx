@@ -23,11 +23,16 @@ interface RecapRow {
 
 const COLUMNS = ['Date', 'Side', 'Bloomberg Ticker', 'Qty', 'Price'] as const
 
-// Two decimals, no thousands separator (e.g. 7676.00, not 7,676.00) — pastes
-// cleanly into Bloomberg and keeps the recap numbers terse.
+// No thousands separator — pastes cleanly into Bloomberg (per-row copy only).
 function formatPrice(price: number): string {
   if (!price) return '—'
   return price.toFixed(2)
+}
+
+// With thousands separator for display, table copy, and email draft.
+function formatPriceDisplay(price: number): string {
+  if (!price) return '—'
+  return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
 // YYYYMMDD → MM/DD/YYYY. Falls back to today when the create date is unknown
@@ -63,7 +68,7 @@ function buildRows(submittedOrders: SubmittedOrder[], fills: FillStatus[]): Reca
 
 // Cells for one row, in COLUMNS order.
 function rowCells(r: RecapRow): string[] {
-  return [r.date, r.side, r.ticker, r.qty.toLocaleString(), formatPrice(r.price)]
+  return [r.date, r.side, r.ticker, r.qty.toLocaleString(), formatPriceDisplay(r.price)]
 }
 
 // Tab-separated value text — pastes cleanly into Excel / Bloomberg / Outlook.
@@ -90,7 +95,7 @@ function toBorderedTable(rows: RecapRow[]): string {
 function toHtml(rows: RecapRow[]): string {
   const td = (v: string, align = 'left') => `<td align="${align}">${v}</td>`
   const body = rows
-    .map((r) => `<tr>${td(r.date)}${td(r.side)}${td(r.ticker)}${td(r.qty.toLocaleString(), 'right')}${td(formatPrice(r.price), 'right')}</tr>`)
+    .map((r) => `<tr>${td(r.date)}${td(r.side)}${td(r.ticker)}${td(r.qty.toLocaleString(), 'right')}${td(formatPriceDisplay(r.price), 'right')}</tr>`)
     .join('')
   return (
     `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">` +
@@ -193,7 +198,7 @@ export function TradeRecap({ submittedOrders, fills }: Props) {
                 <td className="px-4 py-2 text-right font-mono text-white">{r.qty.toLocaleString()}</td>
                 <td className="px-4 py-2 text-right font-mono text-white">
                   <div className="flex items-center justify-end gap-1.5">
-                    <span>{formatPrice(r.price)}</span>
+                    <span>{formatPriceDisplay(r.price)}</span>
                     {r.price > 0 && (
                       <button
                         onClick={() => copyPrice(r.price, i)}
