@@ -10,24 +10,34 @@ interface Props {
   emsxSequences: number[]
   submittedOrders: Array<{ emsxSequence: number; orderId: string; ticker: string; bs: 'BUY' | 'SELL'; lots: number }>
   onAllFilled: () => void
+  onRefreshOrders?: () => Promise<number>
 }
 
-export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Props) {
+export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefreshOrders }: Props) {
   const [fills, setFills] = useState<FillStatusType[]>([])
   const [loading, setLoading] = useState(false)
   const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [showSummary, setShowSummary] = useState(false)
+  const [newOrdersAdded, setNewOrdersAdded] = useState(0)
 
   const allFilled = fills.length > 0 && fills.every(f => f.filledAmount >= f.lots)
 
   const refresh = async () => {
     setLoading(true)
     setError(null)
+    setNewOrdersAdded(0)
     try {
       const { fills: updated } = await getFillStatus(emsxSequences)
       setFills(updated)
       setLastRefreshed(new Date())
+      if (onRefreshOrders) {
+        const added = await onRefreshOrders()
+        if (added > 0) {
+          setNewOrdersAdded(added)
+          setTimeout(() => setNewOrdersAdded(0), 5000)
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unknown error fetching fills')
     } finally {
@@ -52,6 +62,11 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled }: Prop
           {lastRefreshed && (
             <p className="text-slate-500 text-xs mt-0.5">
               Last refreshed: {lastRefreshed.toLocaleTimeString()}
+            </p>
+          )}
+          {newOrdersAdded > 0 && (
+            <p className="text-blue-400 text-xs mt-0.5">
+              {newOrdersAdded} new order{newOrdersAdded !== 1 ? 's' : ''} picked up from EMSX
             </p>
           )}
         </div>

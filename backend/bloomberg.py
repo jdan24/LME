@@ -306,14 +306,22 @@ class BloombergManager:
             return list(self._order_cache.values())
 
     def get_order_refs_with_status(self) -> dict[str, str]:
-        """Return {orderId: status} for all EMSX_NOTES values in the cache."""
-        result: dict[str, str] = {}
+        """Return {orderId: status} for the highest-seq order per EMSX_NOTES value.
+
+        When the same orderId appears on more than one EMSX order (cancel + re-submit),
+        the entry with the highest sequence number wins so the status reflects the most
+        recent order rather than the stale cancelled one.
+        """
+        best: dict[str, dict] = {}  # orderId → highest-seq cache entry
         with self._order_lock:
             for o in self._order_cache.values():
                 val = (o.get("notes") or "").strip()
-                if val:
-                    result[val] = o.get("status", "")
-        return result
+                if not val:
+                    continue
+                seq = o.get("emsxSequence", 0)
+                if val not in best or seq > best[val].get("emsxSequence", 0):
+                    best[val] = o
+        return {val: o.get("status", "") for val, o in best.items()}
 
     def get_existing_order_refs(self) -> set[str]:
         """

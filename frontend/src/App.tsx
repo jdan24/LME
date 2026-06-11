@@ -141,6 +141,39 @@ export default function App() {
     return lme.length
   }, [])
 
+  // Called by FillStatus on each "Refresh Fills" — checks the blotter for orders
+  // that appeared after the current session started (e.g. a re-submitted order
+  // that has a new emsxSequence the teammate's session doesn't know about yet).
+  // Returns the number of new orders merged in so FillStatus can show a notice.
+  const handleRefreshOrders = useCallback(async (): Promise<number> => {
+    try {
+      const { orders: blotter } = await getBlotterOrders()
+      const now = new Date()
+      const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate()
+      const currentSeqs = new Set(submitted.map(o => o.emsxSequence))
+      const newOrders: SubmittedOrder[] = blotter
+        .filter(o =>
+          isLmeTicker(o.ticker) &&
+          !currentSeqs.has(o.emsxSequence) &&
+          !EXCLUDED_STATUSES.has(o.status.toUpperCase()) &&
+          (!o.createDate || o.createDate === today)
+        )
+        .map(o => ({
+          emsxSequence: o.emsxSequence,
+          orderId: o.notes ?? '',
+          ticker: o.ticker,
+          bs: o.bs,
+          lots: o.lots,
+        }))
+      if (newOrders.length > 0) {
+        setSubmitted(prev => [...prev, ...newOrders])
+      }
+      return newOrders.length
+    } catch {
+      return 0
+    }
+  }, [submitted])
+
   const handleReset = useCallback(() => {
     dupBatchRef.current++  // cancel any in-flight retry loop
     setOrders([])
@@ -302,6 +335,7 @@ export default function App() {
             emsxSequences={submitted.map(s => s.emsxSequence)}
             submittedOrders={submitted}
             onAllFilled={() => setAppState('SETTLED')}
+            onRefreshOrders={handleRefreshOrders}
           />
 
           {appState === 'SETTLED' && (
