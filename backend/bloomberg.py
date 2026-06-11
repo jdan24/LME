@@ -19,7 +19,7 @@ import logging
 import re
 from typing import Any
 
-from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, REF_SERVICE
+from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, EMSX_TEAM, REF_SERVICE
 
 log = logging.getLogger(__name__)
 
@@ -130,15 +130,18 @@ class BloombergManager:
         """(Re)subscribe to the EMSX order topic using the current field list."""
         self._sub_attempt += 1
         subs = blpapi.SubscriptionList()
-        # Fields must be passed as a list argument, NOT embedded in the topic string.
+        # emsx_team parameter scopes the subscription to the full team blotter so
+        # orders from all team members are visible, not just the current user's.
+        # UAT team: FCMTEST  |  PROD team: WFC_FUTURES (derived from EMSX_SERVICE).
+        topic = f"{EMSX_SERVICE}/order;emsx_team={EMSX_TEAM}"
         subs.add(
-            f"{EMSX_SERVICE}/order",
+            topic,
             self._sub_fields,
             # Fresh correlation id per attempt so a re-subscribe never collides with
             # the failed one. Dispatch routes order data by event type, not by cid.
             correlationId=blpapi.CorrelationId(f"emsx_orders_{self._sub_attempt}"),
         )
-        log.info("Subscribing to EMSX orders with fields: %s", self._sub_fields)
+        log.info("Subscribing to EMSX orders (team=%s) with fields: %s", EMSX_TEAM, self._sub_fields)
         self._session.subscribe(subs)
 
     def _resubscribe_dropping_field(self, bad_field: str) -> None:

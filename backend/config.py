@@ -12,6 +12,11 @@ BBG_PORT = int(os.getenv("BBG_PORT", "8194"))
 # Bloomberg services
 # Set EMSX_SERVICE=//blp/emapisvc in .env to switch from UAT to live
 EMSX_SERVICE = os.getenv("EMSX_SERVICE", "//blp/emapisvc_beta")
+
+# Bloomberg EMSX team name for team-level order subscription — determines which
+# team's full blotter is visible via the API. Derived from EMSX_SERVICE so
+# switching service automatically switches team with no separate config needed.
+EMSX_TEAM = "WFC_FUTURES" if EMSX_SERVICE == "//blp/emapisvc" else "FCMTEST"
 REF_SERVICE = "//blp/refdata"
 
 # Required — must be set in .env (no defaults so misconfiguration fails loudly)
