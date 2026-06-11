@@ -9,6 +9,11 @@ import { EnvironmentBanner } from './components/EnvironmentBanner'
 import { submitOrders, getConfig, checkDuplicates, getBlotterOrders } from './api/client'
 import { isLmeTicker } from './utils/lmeConfig'
 
+// Statuses that mean an order is definitively dead — excluded from blotter filtering.
+// Explicit set avoids substring matches (e.g. /CANCEL/i would unintentionally match
+// a status string like "FULLFILL_CANCEL" if Bloomberg ever uses one).
+const EXCLUDED_STATUSES = new Set(['CANCEL', 'CANCELED', 'CANCELLED', 'CXLPENDING', 'REJECTED'])
+
 interface SubmittedOrder {
   emsxSequence: number
   orderId: string
@@ -120,7 +125,7 @@ export default function App() {
     // Today's active + filled LME orders; cancelled and prior-day orders excluded.
     const lme = blotter.filter(o =>
       isLmeTicker(o.ticker) &&
-      !/CANCEL/i.test(o.status) &&
+      !EXCLUDED_STATUSES.has(o.status.toUpperCase()) &&
       (!o.createDate || o.createDate === today)
     )
     if (lme.length === 0) return 0
@@ -180,6 +185,34 @@ export default function App() {
       }))
       setSubmitted(submittedList)
       setAppState('MONITORING')
+
+      // Merge any team LME orders already in the shared blotter that weren't
+      // part of this submission (e.g. staged by a teammate on the same account).
+      try {
+        const { orders: blotter } = await getBlotterOrders()
+        const now = new Date()
+        const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate()
+        const ownSeqs = new Set(submittedList.map(o => o.emsxSequence))
+        const teamOrders: SubmittedOrder[] = blotter
+          .filter(o =>
+            isLmeTicker(o.ticker) &&
+            !ownSeqs.has(o.emsxSequence) &&
+            !EXCLUDED_STATUSES.has(o.status.toUpperCase()) &&
+            (!o.createDate || o.createDate === today)
+          )
+          .map(o => ({
+            emsxSequence: o.emsxSequence,
+            orderId: o.notes ?? '',
+            ticker: o.ticker,
+            bs: o.bs,
+            lots: o.lots,
+          }))
+        if (teamOrders.length > 0) {
+          setSubmitted([...submittedList, ...teamOrders])
+        }
+      } catch {
+        // best-effort: own submitted orders are still shown if this fails
+      }
     } catch (e) {
       setSubmitError(e instanceof Error ? e.message : 'Failed to submit orders')
       setAppState('REVIEW')
