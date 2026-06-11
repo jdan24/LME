@@ -1,0 +1,99 @@
+# LME Order Entry Tool — Claude Guidelines
+
+## Project Overview
+
+Full-stack Bloomberg order entry application for LME (London Metal Exchange) traders. The frontend bundles into a single `index.html` at the project root; the backend is a FastAPI server that connects to Bloomberg Terminal via EMSX and RefData APIs.
+
+## Tech Stack
+
+**Frontend:** React 19, TypeScript, Vite, Tailwind CSS, `vite-plugin-singlefile`
+**Backend:** Python, FastAPI, Uvicorn, `blpapi` (Bloomberg Desktop API)
+**Platform:** Windows (Bloomberg Terminal required on localhost:8194)
+
+## Project Structure
+
+```
+LME/
+├── CLAUDE.md                        # This file
+├── index.html                       # Built frontend output (single-file bundle)
+├── start.bat                        # Launch script: starts backend, opens frontend
+├── .env.example                     # Bloomberg config template
+├── backend/
+│   ├── main.py                      # FastAPI app entry point (port 8000)
+│   ├── bloomberg.py                 # Bloomberg session manager + subscriptions
+│   ├── emsx.py                      # EMSX order submission and fill tracking
+│   ├── refdata.py                   # Reference data (settlement prices)
+│   ├── config.py                    # Environment variable loading
+│   └── requirements.txt             # Python dependencies
+└── frontend/
+    ├── src/
+    │   ├── App.tsx                  # Main app component
+    │   ├── types.ts                 # TypeScript interfaces
+    │   ├── api/client.ts            # Backend API client
+    │   ├── components/
+    │   │   ├── FillStatus.tsx       # Order fill status display
+    │   │   ├── OrderSummary.tsx     # Summary statistics
+    │   │   ├── OrderTable.tsx       # Main order list table
+    │   │   ├── PasteArea.tsx        # Data paste/import area
+    │   │   ├── SettlementPanel.tsx  # Settlement data panel
+    │   │   ├── SubmitControls.tsx   # Submit button and controls
+    │   │   └── TradeRecap.tsx       # Trade recap display
+    │   └── utils/
+    │       ├── lmeConfig.ts         # LME ticker validation
+    │       └── parseClipboard.ts    # Clipboard parsing logic
+    ├── vite.config.ts               # Builds single-file bundle to root index.html
+    ├── package.json
+    └── tsconfig.json
+```
+
+## Key Architectural Notes
+
+- The frontend is built as a **single self-contained HTML file** (CSS and JS inlined) via `vite-plugin-singlefile`. The output is the root-level `index.html`, not `frontend/dist/`.
+- CORS is configured to allow `file://` origins so the built `index.html` can be opened directly in a browser without a web server.
+- Bloomberg calls are wrapped in a `ThreadPoolExecutor` to avoid blocking the async FastAPI event loop.
+- Order deduplication uses a multi-attempt retry pattern (2.5s, 4s, 6s delays) to account for Bloomberg subscription lag.
+
+## Development Workflow
+
+**Frontend dev server:**
+```bash
+cd frontend && npm run dev       # hot-reload dev server on :5173
+```
+
+**Backend:**
+```bash
+python -m uvicorn backend.main:app --port 8000
+```
+
+**Or use `start.bat` on Windows to launch both.**
+
+## Build & Deploy Instructions
+
+After completing any code changes:
+
+1. **Build the frontend:**
+   ```bash
+   cd frontend && npm run build
+   ```
+   This runs TypeScript type-checking then Vite build, outputting a single `index.html` to the project root.
+
+2. **Verify the build** — open the root `index.html` locally and confirm the change works as expected.
+
+3. **Commit and push to GitHub:**
+   ```bash
+   git add -A
+   git commit -m "<concise description of change>"
+   git push
+   ```
+
+Always include the built `index.html` in the commit so the repo stays deployable.
+
+## Collaboration Rules
+
+**Always ask clarifying questions before starting work.** Before writing any code, confirm:
+- The exact behavior or outcome expected
+- Which part of the stack is affected (frontend, backend, or both)
+- Any Bloomberg-specific constraints (UAT vs live service, specific LME tickers, etc.)
+- Whether the change affects the build output or only development files
+
+Do not assume intent — LME trading logic and Bloomberg API behavior have real financial consequences. When in doubt, ask.
