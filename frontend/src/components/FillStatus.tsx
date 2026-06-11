@@ -23,7 +23,7 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
 
   const allFilled = fills.length > 0 && fills.every(f => f.filledAmount >= f.lots)
 
-  const refresh = async () => {
+  const refresh = async (syncBlotter = true) => {
     setLoading(true)
     setError(null)
     setNewOrdersAdded(0)
@@ -31,7 +31,7 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
       const { fills: updated } = await getFillStatus(emsxSequences)
       setFills(updated)
       setLastRefreshed(new Date())
-      if (onRefreshOrders) {
+      if (syncBlotter && onRefreshOrders) {
         const added = await onRefreshOrders()
         if (added > 0) {
           setNewOrdersAdded(added)
@@ -47,8 +47,10 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
 
   // Pull fills once on mount so the screen is populated immediately — both after
   // submitting and when a teammate picks up a session from the blotter.
+  // syncBlotter=false avoids racing handleSubmit's concurrent blotter merge, which
+  // would cause duplicate rows (both would append the same working orders to submitted).
   useEffect(() => {
-    if (emsxSequences.length > 0) refresh()
+    if (emsxSequences.length > 0) refresh(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
@@ -78,7 +80,7 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
             Summarize Selected
           </button>
           <button
-            onClick={refresh}
+            onClick={() => refresh()}
             disabled={loading}
             className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
           >

@@ -40,6 +40,12 @@ export default function App() {
   // reset) can be discarded when a newer import supersedes them.
   const dupBatchRef = useRef(0)
 
+  // Mirror of submitted kept in a ref so handleRefreshOrders always sees the
+  // latest list without a stale closure (and without [submitted] as a dep).
+  const submittedRef = useRef<SubmittedOrder[]>([])
+
+  useEffect(() => { submittedRef.current = submitted }, [submitted])
+
   useEffect(() => {
     getConfig()
       .then(setConfig)
@@ -141,20 +147,21 @@ export default function App() {
     return lme.length
   }, [])
 
-  // Called by FillStatus on each "Refresh Fills" — checks the blotter for orders
-  // that appeared after the current session started (e.g. a re-submitted order
-  // that has a new emsxSequence the teammate's session doesn't know about yet).
-  // Returns the number of new orders merged in so FillStatus can show a notice.
+  // Called by FillStatus on explicit "Refresh Fills" clicks — checks the blotter
+  // for orders that appeared after the current session started (e.g. a re-submitted
+  // order with a new emsxSequence the teammate's session doesn't know about yet).
+  // Reads submittedRef.current (always current) to avoid stale closures; the
+  // functional updater provides a final dedup guard against any concurrent state change.
   const handleRefreshOrders = useCallback(async (): Promise<number> => {
     try {
       const { orders: blotter } = await getBlotterOrders()
       const now = new Date()
       const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate()
-      const currentSeqs = new Set(submitted.map(o => o.emsxSequence))
-      const newOrders: SubmittedOrder[] = blotter
+      const knownSeqs = new Set(submittedRef.current.map(o => o.emsxSequence))
+      const novel: SubmittedOrder[] = blotter
         .filter(o =>
           isLmeTicker(o.ticker) &&
-          !currentSeqs.has(o.emsxSequence) &&
+          !knownSeqs.has(o.emsxSequence) &&
           !EXCLUDED_STATUSES.has(o.status.toUpperCase()) &&
           (!o.createDate || o.createDate === today)
         )
@@ -165,14 +172,18 @@ export default function App() {
           bs: o.bs,
           lots: o.lots,
         }))
-      if (newOrders.length > 0) {
-        setSubmitted(prev => [...prev, ...newOrders])
+      if (novel.length > 0) {
+        setSubmitted(prev => {
+          const latestKnown = new Set(prev.map(o => o.emsxSequence))
+          const actuallyNew = novel.filter(o => !latestKnown.has(o.emsxSequence))
+          return actuallyNew.length > 0 ? [...prev, ...actuallyNew] : prev
+        })
       }
-      return newOrders.length
+      return novel.length
     } catch {
       return 0
     }
-  }, [submitted])
+  }, [])
 
   const handleReset = useCallback(() => {
     dupBatchRef.current++  // cancel any in-flight retry loop
