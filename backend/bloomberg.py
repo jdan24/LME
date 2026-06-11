@@ -130,14 +130,18 @@ class BloombergManager:
         """(Re)subscribe to the EMSX order topic using the current field list."""
         self._sub_attempt += 1
         subs = blpapi.SubscriptionList()
+        # ;team=NAME scopes the subscription to the full team blotter so orders
+        # from all team members are visible. UAT=FCMTEST, PROD=WFC_FUTURES.
+        # Fields are passed as a separate list rather than embedded in the topic
+        # string — both forms are equivalent per Bloomberg EMSX API docs.
         subs.add(
-            f"{EMSX_SERVICE}/order",
+            f"{EMSX_SERVICE}/order;team={EMSX_TEAM}",
             self._sub_fields,
             # Fresh correlation id per attempt so a re-subscribe never collides with
             # the failed one. Dispatch routes order data by event type, not by cid.
             correlationId=blpapi.CorrelationId(f"emsx_orders_{self._sub_attempt}"),
         )
-        log.info("Subscribing to EMSX orders with fields: %s", self._sub_fields)
+        log.info("Subscribing to EMSX orders (team=%s) with fields: %s", EMSX_TEAM, self._sub_fields)
         self._session.subscribe(subs)
 
     def _resubscribe_dropping_field(self, bad_field: str) -> None:
