@@ -108,16 +108,19 @@ async def check_duplicates_endpoint(body: DuplicateCheckRequest):
     importing still works offline.
     """
     if not bbg.connected:
-        return {"duplicates": [], "checked": False, "statuses": {}}
+        return {"duplicates": [], "checked": False, "matches": {}}
 
-    existing = bbg.get_order_refs_with_status()
+    existing = bbg.get_order_refs_with_matches()
     dupes = [oid for oid in body.orderIds if oid.strip() in existing]
-    statuses = {oid: existing[oid.strip()] for oid in dupes if oid.strip() in existing}
+    # Every match is returned (not just the newest) — see get_order_refs_with_matches
+    # docstring: the trader needs to see the full status history to sanity-check before
+    # resubmitting, not just whatever the app picked as "the" status.
+    matches = {oid: existing[oid.strip()] for oid in dupes if oid.strip() in existing}
     log.info(
         "Duplicate check: %d incoming ids, %d already in EMSX blotter",
         len(body.orderIds), len(dupes),
     )
-    return {"duplicates": dupes, "checked": True, "statuses": statuses}
+    return {"duplicates": dupes, "checked": True, "matches": matches}
 
 
 @app.get("/api/blotter-orders")

@@ -10,7 +10,7 @@ interface Props {
   config: AppConfig | null
   selected: boolean[]
   duplicateIds: Set<string>
-  duplicateStatuses: Record<string, string>
+  duplicateMatches: Record<string, Array<{ emsxSequence: number; status: string }>>
   dupChecked: boolean
   dupChecking: boolean
   onToggle: (index: number) => void
@@ -28,7 +28,7 @@ function formatTime(iso: string): string {
 }
 
 export function OrderTable({
-  orders, errors, config, selected, duplicateIds, duplicateStatuses, dupChecked, dupChecking,
+  orders, errors, config, selected, duplicateIds, duplicateMatches, dupChecked, dupChecking,
   onToggle, onSelectAll, onSelectNone, onRecheckDuplicates,
 }: Props) {
   const account = config?.account ?? '—'
@@ -113,6 +113,7 @@ export function OrderTable({
             {orders.map((o, i) => {
               const isChecked = selected[i] ?? false
               const isDuplicate = duplicateIds.has(o.orderId)
+              const matches = duplicateMatches[o.orderId] ?? []
               return (
                 <tr
                   key={i}
@@ -140,7 +141,7 @@ export function OrderTable({
                       {o.ticker}
                       {isDuplicate && (
                         <span className="inline-flex px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-900/60 text-amber-300 border border-amber-600">
-                          ⚠ IN EMSX
+                          ⚠ IN EMSX{matches.length > 1 ? ` (${matches.length})` : ''}
                         </span>
                       )}
                     </div>
@@ -162,8 +163,21 @@ export function OrderTable({
                   <td className="px-4 py-3 text-slate-400 text-xs font-mono">{broker}</td>
                   <td className="px-4 py-3 text-slate-400 text-xs font-mono">{account}</td>
                   <td className="px-4 py-3">
-                    {isDuplicate && duplicateStatuses[o.orderId]
-                      ? <StatusBadge status={duplicateStatuses[o.orderId]} />
+                    {/* Every EMSX match is shown (not just the newest) so the trader can see
+                        the full history — e.g. a cancel + re-submit chain — and decide for
+                        themselves whether it's safe to proceed, rather than the app picking
+                        one status for them. */}
+                    {isDuplicate && matches.length > 0
+                      ? (
+                        <div className="flex flex-col gap-1">
+                          {matches.map(m => (
+                            <div key={m.emsxSequence} className="flex items-center gap-1.5">
+                              <span className="text-slate-500 text-[10px] font-mono">#{m.emsxSequence}</span>
+                              <StatusBadge status={m.status} />
+                            </div>
+                          ))}
+                        </div>
+                      )
                       : <span className="text-slate-600 text-xs">—</span>
                     }
                   </td>

@@ -33,7 +33,7 @@ export default function App() {
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [dupChecking, setDupChecking] = useState(false)
-  const [duplicateStatuses, setDuplicateStatuses] = useState<Record<string, string>>({})
+  const [duplicateMatches, setDuplicateMatches] = useState<Record<string, Array<{ emsxSequence: number; status: string }>>>({})
   const [config, setConfig] = useState<AppConfig | null>(null)
 
   // Identifies the current import batch so retries from a previous import (or a
@@ -66,7 +66,7 @@ export default function App() {
 
     const attempt = (delays: number[]) => {
       checkDuplicates(ids)
-        .then(({ duplicates, checked, statuses }) => {
+        .then(({ duplicates, checked, matches }) => {
           if (dupBatchRef.current !== batch) return  // superseded by a newer import/reset
           setDupChecked(checked)
           if (duplicates.length > 0) {
@@ -75,8 +75,19 @@ export default function App() {
               duplicates.forEach(d => next.add(d))
               return next
             })
-            if (statuses && Object.keys(statuses).length > 0) {
-              setDuplicateStatuses(prev => ({ ...prev, ...statuses }))
+            if (matches && Object.keys(matches).length > 0) {
+              // Union (not overwrite) per orderId: later retries can surface additional
+              // EMSX orders as the blotter cache populates, and a match seen on an earlier
+              // attempt must not be dropped just because a later attempt's array omits it.
+              setDuplicateMatches(prev => {
+                const next = { ...prev }
+                for (const [orderId, newMatches] of Object.entries(matches)) {
+                  const merged = new Map((next[orderId] ?? []).map(m => [m.emsxSequence, m]))
+                  newMatches.forEach(m => merged.set(m.emsxSequence, m))
+                  next[orderId] = [...merged.values()].sort((a, b) => b.emsxSequence - a.emsxSequence)
+                }
+                return next
+              })
             }
           }
           if (delays.length > 0) {
@@ -102,7 +113,7 @@ export default function App() {
     // All rows start UNCHECKED — the user explicitly selects which to submit
     setSelected(new Array(parsed.length).fill(false))
     setDuplicateIds(new Set())
-    setDuplicateStatuses({})
+    setDuplicateMatches({})
     setDupChecked(true)
     setParseErrors(errors)
     setAppState(parsed.length > 0 ? 'REVIEW' : 'EMPTY')
@@ -190,7 +201,7 @@ export default function App() {
     setOrders([])
     setSelected([])
     setDuplicateIds(new Set())
-    setDuplicateStatuses({})
+    setDuplicateMatches({})
     setDupChecked(true)
     setDupChecking(false)
     setParseErrors([])
@@ -300,7 +311,7 @@ export default function App() {
             config={config}
             selected={selected}
             duplicateIds={duplicateIds}
-            duplicateStatuses={duplicateStatuses}
+            duplicateMatches={duplicateMatches}
             dupChecked={dupChecked}
             dupChecking={dupChecking}
             onToggle={toggleRow}

@@ -52,6 +52,7 @@ LME/
 - CORS is configured to allow `file://` origins so the built `index.html` can be opened directly in a browser without a web server.
 - Bloomberg calls are wrapped in a `ThreadPoolExecutor` to avoid blocking the async FastAPI event loop.
 - Order deduplication uses a multi-attempt retry pattern (2.5s, 4s, 6s delays) to account for Bloomberg subscription lag.
+- Duplicate detection matches on `EMSX_NOTES` (carries the full EATrade `orderId`), not `EMSX_ORDER_REF_ID` (truncated by the blotter and not a valid subscription field). `BloombergManager.get_order_refs_with_matches()` (`backend/bloomberg.py`) intentionally returns **every** EMSX order tied to an orderId (newest first by `EMSX_SEQUENCE`), not just the latest — this is a deliberate sanity check so a trader can see a full cancel/re-submit history (e.g. `CANCELLED` → `REJECTED` → `WORKING`) and decide whether it's safe to resubmit, rather than the app silently picking one status. The `/api/check-duplicates` response field is `matches: Record<orderId, Array<{emsxSequence, status}>>`. The frontend (`App.tsx`'s `runDupCheck`, `OrderTable.tsx`) renders all matches stacked (`#seq STATUS`) and unions them across retry attempts rather than overwriting, so a match seen on an earlier retry is never dropped. Do not collapse this back to a single "best" status — that was the prior (intentionally reverted) behavior.
 
 ## Development Workflow
 

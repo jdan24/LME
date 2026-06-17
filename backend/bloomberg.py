@@ -305,23 +305,29 @@ class BloombergManager:
         with self._order_lock:
             return list(self._order_cache.values())
 
-    def get_order_refs_with_status(self) -> dict[str, str]:
-        """Return {orderId: status} for the highest-seq order per EMSX_NOTES value.
+    def get_order_refs_with_matches(self) -> dict[str, list[dict]]:
+        """Return {orderId: [{emsxSequence, status}, ...]} for every EMSX order whose
+        EMSX_NOTES matches that orderId, newest (highest sequence) first.
 
-        When the same orderId appears on more than one EMSX order (cancel + re-submit),
-        the entry with the highest sequence number wins so the status reflects the most
-        recent order rather than the stale cancelled one.
+        Unlike a "latest wins" lookup, this intentionally returns the FULL set of matches.
+        An orderId can appear on more than one EMSX order (cancel + re-submit, or multiple
+        re-submits), and collapsing to just the newest hides that history from the trader.
+        Showing every match is a deliberate sanity check: the trader sees the whole chain
+        (e.g. CANCELLED -> REJECTED -> WORKING) and decides whether it's safe to proceed,
+        rather than the app deciding for them.
         """
-        best: dict[str, dict] = {}  # orderId → highest-seq cache entry
+        grouped: dict[str, list[dict]] = {}
         with self._order_lock:
             for o in self._order_cache.values():
                 val = (o.get("notes") or "").strip()
                 if not val:
                     continue
-                seq = o.get("emsxSequence", 0)
-                if val not in best or seq > best[val].get("emsxSequence", 0):
-                    best[val] = o
-        return {val: o.get("status", "") for val, o in best.items()}
+                grouped.setdefault(val, []).append(
+                    {"emsxSequence": o.get("emsxSequence", 0), "status": o.get("status", "")}
+                )
+        for matches in grouped.values():
+            matches.sort(key=lambda m: m["emsxSequence"], reverse=True)
+        return grouped
 
     def get_existing_order_refs(self) -> set[str]:
         """
