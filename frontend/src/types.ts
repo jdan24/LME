@@ -50,5 +50,5 @@ export type AppState =
   | 'MONITORING'
   | 'SETTLED'
 
-// Controls which EMSX statuses "Monitor orders already in EMSX" pulls in.
-export type MonitorFilter = 'ACTIVE' | 'FILLED' | 'ALL'
+// Controls which EMSX statuses are displayed on the Fill Status screen.
+export type FillStatusFilter = 'ACTIVE' | 'FILLED' | 'ALL'

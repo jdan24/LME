@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getFillStatus } from '../api/client'
-import type { FillStatus as FillStatusType } from '../types'
+import type { FillStatus as FillStatusType, FillStatusFilter } from '../types'
 import { contractLabel } from '../utils/lmeConfig'
 import { TradeRecap } from './TradeRecap'
 import { OrderSummary } from './OrderSummary'
@@ -13,6 +13,26 @@ interface Props {
   onRefreshOrders?: () => Promise<number>
 }
 
+// Explicit set avoids substring matches (e.g. /CANCEL/i would unintentionally
+// match a status string like "FULLFILL_CANCEL" if Bloomberg ever uses one).
+const DEAD_STATUSES = new Set(['CANCEL', 'CANCELED', 'CANCELLED', 'CXLPENDING', 'REJECTED'])
+const FILLED_STATUSES = new Set(['FILLED', 'FULLFILL'])
+
+const FILTER_LABELS: Record<FillStatusFilter, string> = {
+  ACTIVE: 'Active',
+  FILLED: 'Filled',
+  ALL: 'All',
+}
+
+// Display-only filter — never affects allFilled/settlement or the recap, which
+// always consider every order regardless of which tab is selected.
+function matchesFilter(status: string, mode: FillStatusFilter): boolean {
+  const s = status.toUpperCase()
+  if (mode === 'ALL') return true
+  if (mode === 'FILLED') return FILLED_STATUSES.has(s)
+  return !DEAD_STATUSES.has(s) && !FILLED_STATUSES.has(s)
+}
+
 export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefreshOrders }: Props) {
   const [fills, setFills] = useState<FillStatusType[]>([])
   const [loading, setLoading] = useState(false)
@@ -20,7 +40,9 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
   const [error, setError] = useState<string | null>(null)
   const [showSummary, setShowSummary] = useState(false)
   const [newOrdersAdded, setNewOrdersAdded] = useState(0)
+  const [filterMode, setFilterMode] = useState<FillStatusFilter>('ACTIVE')
 
+  // Settlement/recap always consider every order, regardless of the display filter.
   const allFilled = fills.length > 0 && fills.every(f => f.filledAmount >= f.lots)
 
   const refresh = async (syncBlotter = true) => {
@@ -56,6 +78,10 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
 
   const contractFromTicker = (ticker: string) => ticker.replace(' Comdty', '')
 
+  const visibleOrders = submittedOrders.filter(o =>
+    matchesFilter(fills.find(f => f.emsxSequence === o.emsxSequence)?.status ?? 'PENDING', filterMode)
+  )
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -73,6 +99,21 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
           )}
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-slate-700 overflow-hidden">
+            {(Object.keys(FILTER_LABELS) as FillStatusFilter[]).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setFilterMode(mode)}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                  filterMode === mode
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}
+              >
+                {FILTER_LABELS[mode]}
+              </button>
+            ))}
+          </div>
           <button
             onClick={() => setShowSummary(true)}
             className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-500 transition-colors text-sm font-medium"
@@ -116,7 +157,14 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
             </tr>
           </thead>
           <tbody>
-            {submittedOrders.map((o) => {
+            {visibleOrders.length === 0 && (
+              <tr>
+                <td colSpan={7} className="px-4 py-6 text-center text-slate-500 text-sm">
+                  No {FILTER_LABELS[filterMode].toLowerCase()} orders to show.
+                </td>
+              </tr>
+            )}
+            {visibleOrders.map((o) => {
               const fill = fills.find(f => f.emsxSequence === o.emsxSequence)
               const filled = fill?.filledAmount ?? 0
               const pct = Math.min(100, Math.round((filled / o.lots) * 100))

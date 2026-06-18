@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { Order, AppState, AppConfig, MonitorFilter } from './types'
+import type { Order, AppState, AppConfig } from './types'
 import { PasteArea } from './components/PasteArea'
 import { OrderTable } from './components/OrderTable'
 import { SubmitControls } from './components/SubmitControls'
@@ -9,25 +9,9 @@ import { EnvironmentBanner } from './components/EnvironmentBanner'
 import { submitOrders, getConfig, checkDuplicates, getBlotterOrders } from './api/client'
 import { isLmeTicker } from './utils/lmeConfig'
 
-// Statuses that mean an order is definitively dead — excluded from blotter filtering.
-// Explicit set avoids substring matches (e.g. /CANCEL/i would unintentionally match
-// a status string like "FULLFILL_CANCEL" if Bloomberg ever uses one).
-const DEAD_STATUSES = new Set(['CANCEL', 'CANCELED', 'CANCELLED', 'CXLPENDING', 'REJECTED'])
-// Kept as an alias for the existing active+filled (exclude-dead) behavior used
-// by handleRefreshOrders and handleSubmit's team-order merge — unrelated to the
-// Active/Filled/All toggle on the "Monitor orders already in EMSX" pickup.
-const EXCLUDED_STATUSES = DEAD_STATUSES
-const FILLED_STATUSES = new Set(['FILLED', 'FULLFILL'])
-
-// Used only by the "Monitor orders already in EMSX" pickup's Active/Filled/All
-// toggle (see PasteArea.tsx) — lets the trader choose what to pull in instead
-// of the app deciding for them.
-function matchesMonitorFilter(status: string, mode: MonitorFilter): boolean {
-  const s = status.toUpperCase()
-  if (mode === 'ALL') return true
-  if (mode === 'FILLED') return FILLED_STATUSES.has(s)
-  return !DEAD_STATUSES.has(s) && !FILLED_STATUSES.has(s)
-}
+// Status is no longer filtered when pulling from the blotter — every status
+// (active, filled, cancelled, rejected) is loaded so the Active/Filled/All
+// toggle on the Fill Status screen has the full picture to filter from.
 
 interface SubmittedOrder {
   emsxSequence: number
@@ -145,11 +129,12 @@ export default function App() {
     runDupCheck(orders.map(o => o.orderId).filter(Boolean))
   }, [orders, runDupCheck])
 
-  // Pick up a monitoring session without importing: pull LME orders already in
-  // the shared EMSX blotter. `mode` lets the trader choose Active / Filled / All
-  // rather than the app deciding for them. Returns the count loaded (0 if none
-  // found) and throws if the bridge is unreachable, so the caller can show feedback.
-  const handleMonitorBlotter = useCallback(async (mode: MonitorFilter): Promise<number> => {
+  // Pick up a monitoring session without importing: pull every LME order already
+  // in the shared EMSX blotter (any status — the Fill Status screen's
+  // Active/Filled/All toggle decides what's displayed). Returns the count loaded
+  // (0 if none found) and throws if the bridge is unreachable, so the caller can
+  // show feedback.
+  const handleMonitorBlotter = useCallback(async (): Promise<number> => {
     const { orders: blotter } = await getBlotterOrders()
     // Today as YYYYMMDD (matches EMSX_ORDER_CREATE_DATE). Orders with no create
     // date (0 — e.g. if EMSX didn't deliver the field) are kept rather than hidden.
@@ -157,7 +142,6 @@ export default function App() {
     const today = now.getFullYear() * 10000 + (now.getMonth() + 1) * 100 + now.getDate()
     const lme = blotter.filter(o =>
       isLmeTicker(o.ticker) &&
-      matchesMonitorFilter(o.status, mode) &&
       (!o.createDate || o.createDate === today)
     )
     if (lme.length === 0) return 0
@@ -188,7 +172,6 @@ export default function App() {
         .filter(o =>
           isLmeTicker(o.ticker) &&
           !knownSeqs.has(o.emsxSequence) &&
-          !EXCLUDED_STATUSES.has(o.status.toUpperCase()) &&
           (!o.createDate || o.createDate === today)
         )
         .map(o => ({
@@ -267,7 +250,6 @@ export default function App() {
           .filter(o =>
             isLmeTicker(o.ticker) &&
             !ownSeqs.has(o.emsxSequence) &&
-            !EXCLUDED_STATUSES.has(o.status.toUpperCase()) &&
             (!o.createDate || o.createDate === today)
           )
           .map(o => ({
