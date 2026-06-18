@@ -215,40 +215,56 @@ class BloombergManager:
             seq = msg.getElementAsInteger("EMSX_SEQUENCE")
             if seq == 0:
                 return  # Bloomberg sometimes sends seq=0 for dummy/initial messages
-            status = msg.getElementAsString("EMSX_STATUS")  if msg.hasElement("EMSX_STATUS")  else ""
-            filled = msg.getElementAsInteger("EMSX_FILLED") if msg.hasElement("EMSX_FILLED") else 0
-            amount = msg.getElementAsInteger("EMSX_AMOUNT") if msg.hasElement("EMSX_AMOUNT") else 0
-            avg_price = msg.getElementAsFloat("EMSX_AVG_PRICE") if msg.hasElement("EMSX_AVG_PRICE") else 0.0
-            ticker = msg.getElementAsString("EMSX_TICKER")  if msg.hasElement("EMSX_TICKER")  else ""
-            # Subscription messages send EMSX_SIDE as a string ("BUY"/"SELL"), not an integer
-            side_raw = msg.getElementAsString("EMSX_SIDE") if msg.hasElement("EMSX_SIDE") else "BUY"
-            bs = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
 
-            notes = msg.getElementAsString("EMSX_NOTES") if msg.hasElement("EMSX_NOTES") else ""
-            # EMSX_DATE is already a YYYYMMDD integer — no conversion needed.
-            create_date = (
-                msg.getElementAsInteger("EMSX_DATE")
-                if msg.hasElement("EMSX_DATE") else 0
-            )
-
+            # Bloomberg sends a full "paint" on initial subscribe, then delta
+            # messages that often carry only the fields that changed (e.g. a fill
+            # event may only include EMSX_STATUS/EMSX_FILLED/EMSX_AVG_PRICE). Start
+            # from whatever is already cached and only overwrite fields present on
+            # THIS message — otherwise a delta-only update wipes out previously
+            # known fields like ticker, which breaks downstream LME-ticker
+            # filtering (see CLAUDE.md).
             with self._order_lock:
                 is_new = seq not in self._order_cache
-                self._order_cache[seq] = {
+                entry = dict(self._order_cache.get(seq, {
                     "emsxSequence": seq,
-                    "status": status,
-                    "filledAmount": filled,
-                    "avgPrice": avg_price,
-                    "lots": amount,
-                    "ticker": ticker,
-                    "bs": bs,
-                    "notes": notes,
-                    "createDate": create_date,
-                }
+                    "status": "",
+                    "filledAmount": 0,
+                    "avgPrice": 0.0,
+                    "lots": 0,
+                    "ticker": "",
+                    "bs": "BUY",
+                    "notes": "",
+                    "createDate": 0,
+                }))
+
+            if msg.hasElement("EMSX_STATUS"):
+                entry["status"] = msg.getElementAsString("EMSX_STATUS")
+            if msg.hasElement("EMSX_FILLED"):
+                entry["filledAmount"] = msg.getElementAsInteger("EMSX_FILLED")
+            if msg.hasElement("EMSX_AMOUNT"):
+                entry["lots"] = msg.getElementAsInteger("EMSX_AMOUNT")
+            if msg.hasElement("EMSX_AVG_PRICE"):
+                entry["avgPrice"] = msg.getElementAsFloat("EMSX_AVG_PRICE")
+            if msg.hasElement("EMSX_TICKER"):
+                entry["ticker"] = msg.getElementAsString("EMSX_TICKER")
+            if msg.hasElement("EMSX_SIDE"):
+                # Subscription messages send EMSX_SIDE as a string ("BUY"/"SELL"), not an integer
+                side_raw = msg.getElementAsString("EMSX_SIDE")
+                entry["bs"] = side_raw if side_raw in ("BUY", "SELL") else ("SELL" if side_raw in ("2", "S") else "BUY")
+            if msg.hasElement("EMSX_NOTES"):
+                entry["notes"] = msg.getElementAsString("EMSX_NOTES")
+            if msg.hasElement("EMSX_DATE"):
+                # EMSX_DATE is already a YYYYMMDD integer — no conversion needed.
+                entry["createDate"] = msg.getElementAsInteger("EMSX_DATE")
+            entry["emsxSequence"] = seq
+
+            with self._order_lock:
+                self._order_cache[seq] = entry
                 cache_size = len(self._order_cache)
             if is_new:
                 log.info(
                     "Cached EMSX order seq=%d status=%s notes=%r (cache size=%d)",
-                    seq, status, notes, cache_size,
+                    seq, entry["status"], entry["notes"], cache_size,
                 )
         except Exception:
             log.exception("Failed to parse EMSX update message")

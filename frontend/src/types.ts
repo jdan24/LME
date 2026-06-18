@@ -49,3 +49,6 @@ export type AppState =
   | 'SUBMITTING'
   | 'MONITORING'
   | 'SETTLED'
+
+// Controls which EMSX statuses "Monitor orders already in EMSX" pulls in.
+export type MonitorFilter = 'ACTIVE' | 'FILLED' | 'ALL'

@@ -1,12 +1,19 @@
 import { useRef, useEffect, useState } from 'react'
 import { parseClipboard } from '../utils/parseClipboard'
-import type { Order } from '../types'
+import type { Order, MonitorFilter } from '../types'
 
 interface Props {
   onParsed: (orders: Order[], errors: string[]) => void
-  // Pull LME orders already in the shared EMSX blotter. Resolves to the number
-  // of orders loaded (0 if none); rejects if the bridge is unreachable.
-  onMonitorBlotter: () => Promise<number>
+  // Pull LME orders already in the shared EMSX blotter, filtered by the chosen
+  // mode. Resolves to the number of orders loaded (0 if none); rejects if the
+  // bridge is unreachable.
+  onMonitorBlotter: (mode: MonitorFilter) => Promise<number>
+}
+
+const MONITOR_FILTER_LABELS: Record<MonitorFilter, string> = {
+  ACTIVE: 'Active',
+  FILLED: 'Filled',
+  ALL: 'All',
 }
 
 export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
@@ -15,6 +22,7 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
   const [parseError, setParseError] = useState<string | null>(null)
   const [monitorLoading, setMonitorLoading] = useState(false)
   const [monitorMsg, setMonitorMsg] = useState<string | null>(null)
+  const [monitorMode, setMonitorMode] = useState<MonitorFilter>('ACTIVE')
 
   // Auto-focus the textarea so Ctrl+V works immediately without clicking
   useEffect(() => {
@@ -55,10 +63,10 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
     setMonitorLoading(true)
     setMonitorMsg(null)
     try {
-      const count = await onMonitorBlotter()
+      const count = await onMonitorBlotter(monitorMode)
       // On success the view navigates to Fill Status; only a zero result returns here.
       if (count === 0) {
-        setMonitorMsg('No active LME orders found in the EMSX blotter.')
+        setMonitorMsg(`No ${MONITOR_FILTER_LABELS[monitorMode].toLowerCase()} LME orders found in the EMSX blotter.`)
       }
     } catch (e) {
       setMonitorMsg(
@@ -118,7 +126,7 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
 
         {/* Pick up a monitoring session without importing — pulls orders already
             staged in the shared EMSX blotter. */}
-        <div className="pt-2 border-t border-slate-800 flex items-center gap-3">
+        <div className="pt-2 border-t border-slate-800 flex items-center gap-3 flex-wrap">
           <button
             onClick={handleMonitor}
             disabled={monitorLoading}
@@ -129,6 +137,24 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
             )}
             Monitor orders already in EMSX →
           </button>
+
+          <div className="flex rounded-lg border border-slate-700 overflow-hidden">
+            {(Object.keys(MONITOR_FILTER_LABELS) as MonitorFilter[]).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setMonitorMode(mode)}
+                disabled={monitorLoading}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
+                  monitorMode === mode
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}
+              >
+                {MONITOR_FILTER_LABELS[mode]}
+              </button>
+            ))}
+          </div>
+
           <span className="text-slate-500 text-xs">
             Skip importing — track fills for orders already staged in the blotter.
           </span>
