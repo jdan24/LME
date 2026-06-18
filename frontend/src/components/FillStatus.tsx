@@ -207,7 +207,12 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
         </table>
       </div>
 
-      <TradeRecap submittedOrders={submittedOrders} fills={fills} />
+      {/* Hidden on the Active tab — a partially-filled "active" order's fill would
+          otherwise show up here right under the active-orders table, which reads
+          as if it were one of the active orders rather than a separate fill record. */}
+      {filterMode !== 'ACTIVE' && (
+        <TradeRecap submittedOrders={submittedOrders} fills={fills} />
+      )}
 
       {allFilled && (
         <div className="flex justify-end">
