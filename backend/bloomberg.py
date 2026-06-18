@@ -17,11 +17,19 @@ import threading
 import queue
 import logging
 import re
+import time
 from typing import Any
 
 from .config import BBG_HOST, BBG_PORT, EMSX_SERVICE, EMSX_TEAM, REF_SERVICE
 
 log = logging.getLogger(__name__)
+
+# How long to treat the EMSX order cache as still warming up after the
+# subscription is issued, mirroring the dedup-retry pattern (2.5s/4s/6s delays)
+# used elsewhere to account for Bloomberg subscription lag. A freshly-opened
+# blotter with zero orders never sends a message, so "has data arrived" isn't a
+# reliable ready signal on its own — a fixed grace period is used instead.
+EMSX_WARMUP_SECONDS = 6.0
 
 
 class BloombergManager:
@@ -53,6 +61,11 @@ class BloombergManager:
         # _subscribe_emsx_orders / the SubscriptionFailure handler).
         self._sub_fields: list[str] = []
         self._sub_attempt = 0
+
+        # Set once, the first time the EMSX order subscription is issued — used
+        # by `emsx_ready` to report a warmup period to the frontend rather than
+        # field-drop re-subscribes resetting the clock.
+        self._subscribed_at: float | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -94,12 +107,23 @@ class BloombergManager:
     def connected(self) -> bool:
         return self._session is not None and self._running
 
+    @property
+    def emsx_ready(self) -> bool:
+        """True once connected AND the EMSX_WARMUP_SECONDS grace period since
+        subscribing has elapsed — see EMSX_WARMUP_SECONDS for why this is
+        time-based rather than waiting for the first order message."""
+        if not self.connected or self._subscribed_at is None:
+            return False
+        return (time.time() - self._subscribed_at) >= EMSX_WARMUP_SECONDS
+
     # ------------------------------------------------------------------
     # EMSX order subscription
     # ------------------------------------------------------------------
 
     def _subscribe_emsx_orders(self) -> None:
         """Subscribe to all EMSX orders so fill updates flow into the cache."""
+        if self._subscribed_at is None:
+            self._subscribed_at = time.time()
         # IMPORTANT: every field here must be a valid *subscription* field on the
         # order topic. If even one is not, EMSX rejects the ENTIRE subscription
         # (SubscriptionFailure: "Invalid field name detected") and no orders ever

@@ -1,5 +1,6 @@
 import { useRef, useEffect, useState } from 'react'
 import { parseClipboard } from '../utils/parseClipboard'
+import { checkHealth } from '../api/client'
 import type { Order } from '../types'
 
 interface Props {
@@ -9,17 +10,44 @@ interface Props {
   onMonitorBlotter: () => Promise<number>
 }
 
+const HEALTH_POLL_MS = 2500
+
 export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const [raw, setRaw] = useState('')
   const [parseError, setParseError] = useState<string | null>(null)
   const [monitorLoading, setMonitorLoading] = useState(false)
   const [monitorMsg, setMonitorMsg] = useState<string | null>(null)
+  // null = haven't heard from the backend yet (treated as still loading).
+  const [health, setHealth] = useState<{ connected: boolean; emsxReady: boolean } | null>(null)
 
   // Auto-focus the textarea so Ctrl+V works immediately without clicking
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
+
+  // Poll Bloomberg health/readiness so the "Monitor" button and warning banner
+  // stay in sync without the user needing to refresh the page once it's ready
+  // (or if the connection drops later while this screen is still open).
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
+      try {
+        const { bloomberg, emsxReady } = await checkHealth()
+        if (!cancelled) setHealth({ connected: bloomberg === 'connected', emsxReady })
+      } catch {
+        if (!cancelled) setHealth({ connected: false, emsxReady: false })
+      }
+    }
+    poll()
+    const interval = setInterval(poll, HEALTH_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [])
+
+  const dataLoading = !health || !health.connected || !health.emsxReady
 
   const parse = (text: string) => {
     setRaw(text)
@@ -116,13 +144,25 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
           <p className="text-slate-500 text-xs">Parsing…</p>
         )}
 
+        {dataLoading && (
+          <div className="bg-amber-900/30 border border-amber-600 rounded-lg px-4 py-2 text-amber-300 text-xs flex items-center gap-2">
+            <span className="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
+            <span>
+              {!health || !health.connected
+                ? 'Connecting to the Bloomberg bridge…'
+                : 'Bloomberg order data is still loading — "Monitor orders already in EMSX" will be available shortly.'}
+            </span>
+          </div>
+        )}
+
         {/* Pick up a monitoring session without importing — pulls orders already
             staged in the shared EMSX blotter. */}
         <div className="pt-2 border-t border-slate-800 flex items-center gap-3">
           <button
             onClick={handleMonitor}
-            disabled={monitorLoading}
-            className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 flex items-center gap-2"
+            disabled={monitorLoading || dataLoading}
+            title={dataLoading ? 'Waiting on Bloomberg order data to finish loading' : undefined}
+            className="px-4 py-2 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {monitorLoading && (
               <span className="inline-block w-4 h-4 border-2 border-slate-400 border-t-white rounded-full animate-spin" />

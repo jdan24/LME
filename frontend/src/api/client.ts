@@ -16,7 +16,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function checkHealth(): Promise<{ status: string; bloomberg: string }> {
+export async function checkHealth(): Promise<{ status: string; bloomberg: string; emsxReady: boolean }> {
   return request('/health')
 }
 

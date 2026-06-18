@@ -82,7 +82,13 @@ class DuplicateCheckRequest(BaseModel):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "bloomberg": "connected" if bbg.connected else "disconnected"}
+    return {
+        "status": "ok",
+        "bloomberg": "connected" if bbg.connected else "disconnected",
+        # True once the EMSX order-blotter subscription's warmup grace period has
+        # elapsed — lets the frontend warn while Bloomberg data may still be loading.
+        "emsxReady": bbg.emsx_ready,
+    }
 
 
 @app.get("/api/config")
