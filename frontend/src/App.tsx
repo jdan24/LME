@@ -219,6 +219,12 @@ export default function App() {
     [orders]
   )
   const selectNone = useCallback(() => setSelected(prev => prev.map(() => false)), [])
+  // Select New checks only rows whose orderId was NOT found in the EMSX blotter,
+  // deselecting everything else — an absolute selection like Select All/None.
+  const selectNew = useCallback(
+    () => setSelected(orders.map(o => !duplicateIds.has(o.orderId))),
+    [orders, duplicateIds]
+  )
 
   // Only checked rows are submitted
   const selectedOrders = orders.filter((_, i) => selected[i])
@@ -312,6 +318,7 @@ export default function App() {
             dupChecked={dupChecked}
             dupChecking={dupChecking}
             onToggle={toggleRow}
+            onSelectNew={selectNew}
             onSelectAll={selectAll}
             onSelectNone={selectNone}
             onRecheckDuplicates={recheckDuplicates}

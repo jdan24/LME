@@ -14,6 +14,7 @@ interface Props {
   dupChecked: boolean
   dupChecking: boolean
   onToggle: (index: number) => void
+  onSelectNew: () => void
   onSelectAll: () => void
   onSelectNone: () => void
   onRecheckDuplicates: () => void
@@ -29,7 +30,7 @@ function formatTime(iso: string): string {
 
 export function OrderTable({
   orders, errors, config, selected, duplicateIds, duplicateMatches, dupChecked, dupChecking,
-  onToggle, onSelectAll, onSelectNone, onRecheckDuplicates,
+  onToggle, onSelectNew, onSelectAll, onSelectNone, onRecheckDuplicates,
 }: Props) {
   const account = config?.account ?? '—'
   const broker  = config?.broker  ?? '—'
@@ -62,6 +63,14 @@ export function OrderTable({
           <span className="text-blue-300 font-medium">{selectedCount}</span> of {orders.length} selected
         </span>
         <div className="flex gap-2">
+          <button
+            onClick={onSelectNew}
+            disabled={!dupChecked || dupChecking}
+            title={!dupChecked || dupChecking ? 'Waiting on the EMSX duplicate check' : undefined}
+            className="px-3 py-1 rounded-md bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-xs font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Select New
+          </button>
           <button
             onClick={onSelectAll}
             className="px-3 py-1 rounded-md bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-xs font-medium"
