@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from .bloomberg import bbg
 from .emsx import submit_order, get_fill_status, log_order_schema, log_subscription_schema
 from .refdata import get_settlement
-from .config import EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE, EMSX_TIF, EMSX_HAND_INSTR, EMSX_SERVICE
+from .config import EMSX_ACCOUNT, EMSX_BROKER, EMSX_ORDER_TYPE, EMSX_TIF, EMSX_HAND_INSTR, EMSX_SERVICE, LME_ENV
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -93,15 +93,14 @@ async def health():
 
 @app.get("/api/config")
 async def get_config():
-    """Returns display-only order config for the frontend. Values come from .env."""
-    environment = "PROD" if EMSX_SERVICE == "//blp/emapisvc" else "UAT"
+    """Returns display-only order config for the frontend. Values come from .env.prod/.env.uat."""
     return {
         "account": EMSX_ACCOUNT,
         "broker": EMSX_BROKER,
         "orderType": EMSX_ORDER_TYPE,
         "tif": EMSX_TIF,
         "handlingInstr": EMSX_HAND_INSTR,
-        "environment": environment,
+        "environment": LME_ENV,
     }
 
 

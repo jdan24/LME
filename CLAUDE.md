@@ -16,8 +16,10 @@ Full-stack Bloomberg order entry application for LME (London Metal Exchange) tra
 LME/
 ├── CLAUDE.md                        # This file
 ├── index.html                       # Built frontend output (single-file bundle)
-├── start.bat                        # Launch script: starts backend, opens frontend
-├── .env.example                     # Bloomberg config template
+├── start-prod.bat                    # Launch script: starts backend in PROD, opens frontend
+├── start-uat.bat                     # Launch script: starts backend in UAT, opens frontend
+├── .env.prod.example                 # PROD Bloomberg config template
+├── .env.uat.example                  # UAT Bloomberg config template
 ├── backend/
 │   ├── main.py                      # FastAPI app entry point (port 8000)
 │   ├── bloomberg.py                 # Bloomberg session manager + subscriptions
@@ -55,6 +57,7 @@ LME/
 - Duplicate detection matches on `EMSX_NOTES` (carries the full EATrade `orderId`), not `EMSX_ORDER_REF_ID` (truncated by the blotter and not a valid subscription field). `BloombergManager.get_order_refs_with_matches()` (`backend/bloomberg.py`) intentionally returns **every** EMSX order tied to an orderId (newest first by `EMSX_SEQUENCE`), not just the latest — this is a deliberate sanity check so a trader can see a full cancel/re-submit history (e.g. `CANCELLED` → `REJECTED` → `WORKING`) and decide whether it's safe to resubmit, rather than the app silently picking one status. The `/api/check-duplicates` response field is `matches: Record<orderId, Array<{emsxSequence, status}>>`. The frontend (`App.tsx`'s `runDupCheck`, `OrderTable.tsx`) renders all matches stacked (`#seq STATUS`) and unions them across retry attempts rather than overwriting, so a match seen on an earlier retry is never dropped. Do not collapse this back to a single "best" status — that was the prior (intentionally reverted) behavior.
 - `BloombergManager._handle_emsx_update()` (`backend/bloomberg.py`) **merges** each EMSX order-subscription message into the existing cache entry (`dict(self._order_cache.get(seq, defaults))`, then overwrite only fields present via `msg.hasElement(...)`) rather than replacing the entry wholesale. Bloomberg sends a full "paint" on initial subscribe but later delta messages (e.g. a fill event) often carry only the fields that changed — just `EMSX_STATUS`/`EMSX_FILLED`/`EMSX_AVG_PRICE`, omitting `EMSX_TICKER`/`EMSX_SIDE`/`EMSX_NOTES`/`EMSX_DATE`. A wholesale overwrite blanks those omitted fields out (ticker → `""`), which silently breaks `isLmeTicker()` filtering downstream and made already-filled orders disappear from "Monitor orders already in EMSX" even though the backend cache showed the correct fill status. Do not revert this to a fresh-dict-per-message pattern.
 - Blotter pulls (`App.tsx`'s `handleMonitorBlotter`, `handleRefreshOrders`, and `handleSubmit`'s post-submit team-order merge) load every EMSX status (active, filled, cancelled, rejected) — they only filter on LME ticker and today's date, never on status. The **Fill Status** screen (`FillStatus.tsx`) is where status filtering happens: it has an Active/Filled/All toggle (`FillStatusFilter` in `types.ts`, default `ACTIVE`) that controls which rows are *displayed*, always visible there regardless of whether the session started via Submit or via "Monitor orders already in EMSX". This is purely a display filter — `allFilled`/the settlement transition and `TradeRecap` always consider every order, not just the currently selected tab, so switching tabs never changes whether the session is "done."
+- **PROD vs UAT** is selected by the `LME_ENV` environment variable (`PROD` or `UAT`, defaults to `UAT`), set by `start-prod.bat` / `start-uat.bat` before launching uvicorn. `backend/config.py` reads `LME_ENV` and loads `.env.prod` or `.env.uat` accordingly (each gitignored, copied from the matching `.env.*.example`). `EMSX_SERVICE` in that file determines the actual Bloomberg endpoint (`//blp/emapisvc` live vs `//blp/emapisvc_beta` UAT) and the derived `EMSX_TEAM`; `LME_ENV` itself (not a re-derivation from `EMSX_SERVICE`) is what `/api/config` returns as `environment`, which `App.tsx` renders via `EnvironmentBanner` (`frontend/src/components/EnvironmentBanner.tsx`) — a badge fixed above all app states so it's visible regardless of which screen is showing. Running the backend directly without a start script (e.g. plain `uvicorn backend.main:app`) defaults to UAT rather than failing closed to PROD.
 
 ## Development Workflow
 
@@ -63,12 +66,12 @@ LME/
 cd frontend && npm run dev       # hot-reload dev server on :5173
 ```
 
-**Backend:**
+**Backend (defaults to UAT if LME_ENV is unset):**
 ```bash
 python -m uvicorn backend.main:app --port 8000
 ```
 
-**Or use `start.bat` on Windows to launch both.**
+**Or use `start-prod.bat` / `start-uat.bat` on Windows to launch both in the corresponding environment.**
 
 ## Build & Deploy Instructions
 
