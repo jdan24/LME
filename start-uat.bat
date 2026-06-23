@@ -9,7 +9,7 @@ if not exist "%~dp0.env.uat" (
 )
 
 echo Starting Bloomberg bridge in UAT...
-start "LME Bloomberg Bridge - UAT" cmd /k "cd /d %~dp0 && set LME_ENV=UAT && python -m uvicorn backend.main:app --port 8000"
+start "LME Bloomberg Bridge - UAT" cmd /k "cd /d %~dp0 && python -m uvicorn backend.main:app --port 8000"
 
 timeout /t 3 /nobreak > nul
 

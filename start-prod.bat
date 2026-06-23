@@ -9,7 +9,7 @@ if not exist "%~dp0.env.prod" (
 )
 
 echo Starting Bloomberg bridge in PROD...
-start "LME Bloomberg Bridge - PROD" cmd /k "cd /d %~dp0 && set LME_ENV=PROD && python -m uvicorn backend.main:app --port 8000"
+start "LME Bloomberg Bridge - PROD" cmd /k "cd /d %~dp0 && python -m uvicorn backend.main:app --port 8000"
 
 timeout /t 3 /nobreak > nul
 
