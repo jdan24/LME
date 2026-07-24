@@ -3,6 +3,8 @@
 A full-stack Bloomberg order-entry application for **LME (London Metal Exchange)** traders. It imports LME orders from EATrade, **stages** them into Bloomberg EMSX, and tracks fills through to settlement — all from a single screen.
 
 > **Traders:** for a non-technical, step-by-step walkthrough see **[docs/LME-Order-Entry-User-Guide.pdf](docs/LME-Order-Entry-User-Guide.pdf)**. This README is for developers and IT.
+>
+> The guide's editable source is **[docs/LME-Order-Entry-User-Guide.md](docs/LME-Order-Entry-User-Guide.md)** — edit that, then regenerate the PDF (see [Editing the trader guide](#editing-the-trader-guide)).
 
 ---
 
@@ -154,6 +156,16 @@ git push
 | `GET`  | `/api/settlement` | LME settlement prices by ticker |
 
 ---
+
+## Editing the trader guide
+
+The trader guide is maintained in Markdown at [`docs/LME-Order-Entry-User-Guide.md`](docs/LME-Order-Entry-User-Guide.md) — that file is the source of truth. Edit it in any text editor, then regenerate `docs/LME-Order-Entry-User-Guide.pdf`. On Windows with Microsoft Word, any of these works:
+
+- **Word (simplest):** open the `.md` in Word (Microsoft 365 / Word 2024+ import Markdown directly), then **File → Save As → PDF**.
+- **Pandoc:** `pandoc docs/LME-Order-Entry-User-Guide.md -o docs/LME-Order-Entry-User-Guide.pdf`
+- **VS Code:** the *Markdown PDF* extension → right-click → *Export (pdf)*.
+
+Commit the updated `.md` **and** the regenerated `.pdf` together so the repo stays in sync.
 
 ## Notes for maintainers
 
