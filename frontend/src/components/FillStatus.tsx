@@ -41,6 +41,9 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
   const [showSummary, setShowSummary] = useState(false)
   const [newOrdersAdded, setNewOrdersAdded] = useState(0)
   const [filterMode, setFilterMode] = useState<FillStatusFilter>('ACTIVE')
+  // Trader names typed into the recap, keyed by EMSX sequence. Held here (not in
+  // TradeRecap) so they survive the recap unmounting on the Active tab.
+  const [traderNames, setTraderNames] = useState<Record<number, string>>({})
 
   // Settlement/recap always consider every order, regardless of the display filter.
   const allFilled = fills.length > 0 && fills.every(f => f.filledAmount >= f.lots)
@@ -211,7 +214,12 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
           otherwise show up here right under the active-orders table, which reads
           as if it were one of the active orders rather than a separate fill record. */}
       {filterMode !== 'ACTIVE' && (
-        <TradeRecap submittedOrders={submittedOrders} fills={fills} />
+        <TradeRecap
+          submittedOrders={submittedOrders}
+          fills={fills}
+          traderNames={traderNames}
+          onTraderNamesChange={setTraderNames}
+        />
       )}
 
       {allFilled && (
