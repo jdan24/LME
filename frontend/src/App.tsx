@@ -46,11 +46,20 @@ export default function App() {
   useEffect(() => { submittedRef.current = submitted }, [submitted])
 
   useEffect(() => {
-    getConfig()
-      .then(setConfig)
-      .catch(() => {
-        // Backend not reachable yet — show placeholder; will retry on next action
-      })
+    // The bridge may still be starting (or not running yet) when the page opens,
+    // so keep retrying until it answers rather than giving up after one attempt.
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const load = () => {
+      getConfig()
+        .then(cfg => { if (!cancelled) setConfig(cfg) })
+        .catch(() => { if (!cancelled) timer = setTimeout(load, 3000) })
+    }
+    load()
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
   }, [])
 
   // De-dup against EMSX. The order blotter streams into the backend cache

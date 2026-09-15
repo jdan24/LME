@@ -12,14 +12,14 @@ A full-stack Bloomberg order-entry application for **LME (London Metal Exchange)
 
 ```
 EATrade grid ──paste──▶  Frontend (single-file index.html)
-                              │  HTTP (localhost:8000)
+                              │  HTTP (localhost:8000, or next free port)
                               ▼
                          FastAPI backend  ──blpapi──▶  Bloomberg Terminal
                          "Bloomberg bridge"            (EMSX + RefData, :8194)
 ```
 
-- The **frontend** is a React/TypeScript app bundled into one self-contained `index.html` (CSS + JS inlined) via `vite-plugin-singlefile`. It can be opened directly from disk (`file://`) — no web server needed.
-- The **backend** ("the Bloomberg bridge") is a FastAPI app that talks to a locally running Bloomberg Terminal through the Bloomberg Desktop API (`blpapi`). It exposes a small JSON API on `localhost:8000`.
+- The **frontend** is a React/TypeScript app bundled into one self-contained `index.html` (CSS + JS inlined) via `vite-plugin-singlefile`. The bridge serves it at `http://localhost:<port>/`. It can also be opened directly from disk (`file://`), but then it only finds a bridge on the default port 8000.
+- The **backend** ("the Bloomberg bridge") is a FastAPI app that talks to a locally running Bloomberg Terminal through the Bloomberg Desktop API (`blpapi`). It exposes a small JSON API on `localhost:8000`, or the next free port if another program already holds 8000 (see [Port conflicts](#port-conflicts)).
 - Orders are **staged, not routed** — the tool places orders into EMSX; the trader routes them to market manually in EMSX. Fixed order parameters: **MOC** (Market-On-Close), **DAY**, handling **MAN**.
 
 ---
@@ -57,7 +57,8 @@ LME/
 ├── docs/
 │   └── LME-Order-Entry-User-Guide.pdf   # Trader-facing guide (PROD)
 ├── backend/
-│   ├── main.py                 # FastAPI app + API routes (port 8000)
+│   ├── launch.py               # Start-script entry point: picks a free port, opens the browser
+│   ├── main.py                 # FastAPI app + API routes, serves index.html at /
 │   ├── bloomberg.py            # Bloomberg session manager + EMSX subscriptions
 │   ├── emsx.py                 # Order submission (staging) and fill tracking
 │   ├── refdata.py              # Reference data (settlement prices)
@@ -92,6 +93,7 @@ Then fill in the values:
 | `EMSX_BROKER` | Bloomberg EMSX broker code |
 | `EMSX_SERVICE` | `//blp/emapisvc` (live) or `//blp/emapisvc_beta` (UAT) — determines the endpoint and the derived EMSX team |
 | `BBG_HOST` / `BBG_PORT` | Bloomberg Desktop API connection (defaults `localhost:8194`) |
+| `APP_PORT` | Optional. First local port the bridge tries (default `8000`). The launcher tries up to 10 more if it's taken |
 
 > Running the backend directly without a start script defaults to **UAT**, so it never lands on the live service by accident.
 
@@ -104,16 +106,30 @@ Then fill in the values:
 ### Windows (normal use)
 
 ```bat
-start-prod.bat   :: PROD — starts the bridge (uvicorn :8000) and opens index.html
+start-prod.bat   :: PROD — runs `python -m backend.launch`, which starts the bridge and opens the page
 start-uat.bat    :: UAT
 ```
+
+### Port conflicts
+
+`backend/launch.py` checks the port **before** starting the server, so no Bloomberg session opens on a port it can't use:
+
+| Port state | What the launcher does |
+|---|---|
+| Free | Starts the bridge there |
+| Held by an LME bridge for the **same** environment | Says it's already running, opens that URL, and exits (no second Bloomberg session) |
+| Held by anything else (another app, or the other environment's bridge) | Prints what holds it (Windows: via `netstat`/`tasklist`) and tries the next port, up to `APP_PORT + 10` |
+| All ports taken | Prints plain-English instructions and waits for Enter |
+
+Once the server answers `/api/health`, the launcher opens `http://localhost:<port>/`. The page calls `/api` on the same origin, so it follows whichever port was chosen. If the page can't reach the bridge for ~10s, it shows a red "Can't reach the LME Bloomberg bridge" banner with next steps, then clears it automatically on reconnect.
 
 ### Manual / development
 
 Backend (defaults to UAT if `LME_ENV` is unset):
 
 ```bash
-python -m uvicorn backend.main:app --port 8000
+python -m backend.launch                          # same port handling as the start scripts
+python -m uvicorn backend.main:app --port 8000    # or run uvicorn directly
 ```
 
 Frontend hot-reload dev server on `:5173`:
@@ -143,11 +159,12 @@ git push
 
 ---
 
-## API surface (backend, `localhost:8000`)
+## API surface (backend, `localhost:8000` by default)
 
 | Method | Route | Purpose |
 |--------|-------|---------|
-| `GET`  | `/api/health` | Bloomberg connection / EMSX readiness |
+| `GET`  | `/` | Serves the built `index.html` |
+| `GET`  | `/api/health` | App id + environment (used by the launcher), Bloomberg connection / EMSX readiness |
 | `GET`  | `/api/config` | Active environment + fixed order params |
 | `POST` | `/api/check-duplicates` | Match `orderId`s against the EMSX blotter |
 | `GET`  | `/api/blotter-orders` | All LME orders in the shared blotter |

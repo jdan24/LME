@@ -21,7 +21,8 @@ LME/
 ├── .env.prod.example                 # PROD Bloomberg config template
 ├── .env.uat.example                  # UAT Bloomberg config template
 ├── backend/
-│   ├── main.py                      # FastAPI app entry point (port 8000)
+│   ├── launch.py                    # Start-script entry point: picks a free port, opens browser
+│   ├── main.py                      # FastAPI app (port 8000 by default), serves index.html at /
 │   ├── bloomberg.py                 # Bloomberg session manager + subscriptions
 │   ├── emsx.py                      # EMSX order submission and fill tracking
 │   ├── refdata.py                   # Reference data (settlement prices)
@@ -51,6 +52,7 @@ LME/
 ## Key Architectural Notes
 
 - The frontend is built as a **single self-contained HTML file** (CSS and JS inlined) via `vite-plugin-singlefile`. The output is the root-level `index.html`, not `frontend/dist/`.
+- **Port conflicts:** the bridge port is *not* fixed at 8000. Another app on the PROD machine held 8000 and uvicorn died with `WinError 10048`. The start scripts run `python -m backend.launch` (`backend/launch.py`), which checks ports from `APP_PORT` (default 8000) up to +10 *before* importing `backend.main`, so no Bloomberg session opens on an unusable port. A busy port answering `/api/health` with `app == "lme-order-entry"` and the same `environment` means the bridge is already running: open it and exit. Anything else: try the next port. `main.py` serves `index.html` at `/`, and `api/client.ts` uses same-origin `/api` when served over http (falling back to `localhost:8000` only for `file://`), so the page follows whatever port was chosen. `PasteArea.tsx` shows a red "Can't reach the LME Bloomberg bridge" banner after 4 failed health polls. Don't hardcode 8000 back into the start scripts or the client.
 - CORS is configured to allow `file://` origins so the built `index.html` can be opened directly in a browser without a web server.
 - Bloomberg calls are wrapped in a `ThreadPoolExecutor` to avoid blocking the async FastAPI event loop.
 - Order deduplication uses a multi-attempt retry pattern (2.5s, 4s, 6s delays) to account for Bloomberg subscription lag.
@@ -68,7 +70,8 @@ cd frontend && npm run dev       # hot-reload dev server on :5173
 
 **Backend (defaults to UAT if LME_ENV is unset):**
 ```bash
-python -m uvicorn backend.main:app --port 8000
+python -m backend.launch                        # auto port selection, same as start scripts
+python -m uvicorn backend.main:app --port 8000  # or directly
 ```
 
 **Or use `start-prod.bat` / `start-uat.bat` on Windows to launch both in the corresponding environment.**

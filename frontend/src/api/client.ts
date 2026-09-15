@@ -1,8 +1,12 @@
 import type { Order, FillStatus, SettlementPrice, AppConfig } from '../types'
 
 // In dev (`npm run dev`) the Vite proxy forwards /api → localhost:8000.
-// In production (built index.html opened as a file) we need the absolute URL.
-const BASE = import.meta.env.DEV ? '/api' : 'http://localhost:8000/api'
+// In production the bridge serves index.html itself (on 8000, or the next free
+// port if 8000 was taken), so the API is on the same origin. If index.html is
+// opened directly as a file instead, fall back to the default port.
+const BASE = import.meta.env.DEV || location.protocol.startsWith('http')
+  ? '/api'
+  : 'http://localhost:8000/api'
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
@@ -16,7 +20,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json()
 }
 
-export async function checkHealth(): Promise<{ status: string; bloomberg: string; emsxReady: boolean }> {
+export async function checkHealth(): Promise<{ status: string; app: string; environment: string; bloomberg: string; emsxReady: boolean }> {
   return request('/health')
 }
 

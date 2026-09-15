@@ -1,8 +1,10 @@
 """
 LME Order Entry — FastAPI backend.
 
-Runs on localhost:8000. The React frontend (Vite dev server on :5173)
-proxies /api/* requests here.
+Started by backend/launch.py on localhost:8000 by default (or the next free
+port if 8000 is taken). It also serves the built index.html at "/", so the page
+always talks to whichever port the bridge ended up on. The React frontend
+(Vite dev server on :5173) proxies /api/* requests here during development.
 
 All Bloomberg calls are executed in a thread pool executor because blpapi
 is synchronous and must not block the asyncio event loop.
@@ -12,9 +14,11 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from .bloomberg import bbg
@@ -80,10 +84,22 @@ class DuplicateCheckRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+INDEX_HTML = Path(__file__).parent.parent / "index.html"
+
+
+@app.get("/", include_in_schema=False)
+async def index():
+    """Serves the built frontend so it's same-origin with the API on whatever port was chosen."""
+    return FileResponse(INDEX_HTML)
+
+
 @app.get("/api/health")
 async def health():
     return {
         "status": "ok",
+        # Lets backend/launch.py recognise an already-running bridge on a busy port.
+        "app": "lme-order-entry",
+        "environment": LME_ENV,
         "bloomberg": "connected" if bbg.connected else "disconnected",
         # True once the EMSX order-blotter subscription's warmup grace period has
         # elapsed — lets the frontend warn while Bloomberg data may still be loading.

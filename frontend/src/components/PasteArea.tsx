@@ -11,6 +11,9 @@ interface Props {
 }
 
 const HEALTH_POLL_MS = 2500
+// Consecutive failed health polls (~10s) before we stop saying "Connecting…"
+// and tell the user the bridge isn't running.
+const BRIDGE_DOWN_POLLS = 4
 
 export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -19,7 +22,8 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
   const [monitorLoading, setMonitorLoading] = useState(false)
   const [monitorMsg, setMonitorMsg] = useState<string | null>(null)
   // null = haven't heard from the backend yet (treated as still loading).
-  const [health, setHealth] = useState<{ connected: boolean; emsxReady: boolean } | null>(null)
+  const [health, setHealth] = useState<{ reachable: boolean; connected: boolean; emsxReady: boolean } | null>(null)
+  const [failedPolls, setFailedPolls] = useState(0)
 
   // Auto-focus the textarea so Ctrl+V works immediately without clicking
   useEffect(() => {
@@ -34,9 +38,13 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
     const poll = async () => {
       try {
         const { bloomberg, emsxReady } = await checkHealth()
-        if (!cancelled) setHealth({ connected: bloomberg === 'connected', emsxReady })
+        if (cancelled) return
+        setHealth({ reachable: true, connected: bloomberg === 'connected', emsxReady })
+        setFailedPolls(0)
       } catch {
-        if (!cancelled) setHealth({ connected: false, emsxReady: false })
+        if (cancelled) return
+        setHealth({ reachable: false, connected: false, emsxReady: false })
+        setFailedPolls(n => n + 1)
       }
     }
     poll()
@@ -48,6 +56,7 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
   }, [])
 
   const dataLoading = !health || !health.connected || !health.emsxReady
+  const bridgeDown = failedPolls >= BRIDGE_DOWN_POLLS
 
   const parse = (text: string) => {
     setRaw(text)
@@ -144,13 +153,24 @@ export function PasteArea({ onParsed, onMonitorBlotter }: Props) {
           <p className="text-slate-500 text-xs">Parsing…</p>
         )}
 
-        {dataLoading && (
+        {bridgeDown ? (
+          <div className="bg-red-900/40 border border-red-700 rounded-lg px-4 py-3 text-red-300 text-xs space-y-1">
+            <p className="font-semibold text-sm">Can't reach the LME Bloomberg bridge.</p>
+            <p>
+              Make sure the black <strong>"LME Bloomberg Bridge"</strong> window is open. If it was closed or
+              shows an error, close it and double-click <code className="bg-red-950/60 px-1 rounded">start-prod.bat</code> again.
+            </p>
+            <p className="text-red-400/80">This page reconnects automatically once the bridge is running.</p>
+          </div>
+        ) : dataLoading && (
           <div className="bg-amber-900/30 border border-amber-600 rounded-lg px-4 py-2 text-amber-300 text-xs flex items-center gap-2">
             <span className="inline-block w-3 h-3 border-2 border-amber-400 border-t-transparent rounded-full animate-spin shrink-0" />
             <span>
-              {!health || !health.connected
+              {!health || !health.reachable
                 ? 'Connecting to the Bloomberg bridge…'
-                : 'Bloomberg order data is still loading — "Monitor orders already in EMSX" will be available shortly.'}
+                : !health.connected
+                  ? 'The bridge is running but is not connected to Bloomberg — check that Bloomberg Terminal is open and logged in.'
+                  : 'Bloomberg order data is still loading — "Monitor orders already in EMSX" will be available shortly.'}
             </span>
           </div>
         )}

@@ -34,7 +34,7 @@ Open Bloomberg → launch the tool → paste orders from EATrade → pick the ro
 1. **Open Bloomberg Terminal and log in.** Do this first, every time. Leave it running in the background.
 2. **Double-click `start-prod.bat`.** This is the launcher in the tool's folder. Your IT team can add a desktop shortcut to it.
 3. **A black window titled "LME Bloomberg Bridge - PROD" opens. Leave it open.** This window is the bridge between the tool and Bloomberg. You can minimize it, but do **NOT** close it while you are working — closing it disconnects the tool.
-4. **After a few seconds the LME Order Entry screen opens in your web browser.** If it does not open on its own, ask IT for the `index.html` shortcut.
+4. **After a few seconds the LME Order Entry screen opens in your web browser** (the address looks like `http://localhost:8000`). If another program is already using that address, the bridge automatically picks the next free one (e.g. `8001`) and says so in the black window. You don't need to do anything. If the bridge is already running from earlier, it just reopens the page.
 5. **Wait for the amber "loading" banner to clear.** While it reads *"Connecting…"* or *"Bloomberg order data is still loading"*, the tool is not ready yet. When the banner disappears, you are connected and can begin.
 
 > **At the end of the day:** close the browser tab, then close the black bridge window. That fully shuts the tool down.
@@ -81,6 +81,9 @@ If your LME orders are already in EMSX — because you staged them earlier, or a
 | What you see | What to do |
 |---|---|
 | The loading banner never clears / *"Connecting to the Bloomberg bridge"* | Check that Bloomberg Terminal is open and logged in, and that the black bridge window is still open. If the bridge window was closed, run `start-prod.bat` again. |
+| Red banner: *"Can't reach the LME Bloomberg bridge"* | The black bridge window is closed or has stopped. Close it if it's still open, then double-click `start-prod.bat` again. The page reconnects by itself; no need to refresh. |
+| *"The bridge is running but is not connected to Bloomberg"* | Open and log in to Bloomberg Terminal, then close the black bridge window and run `start-prod.bat` again. |
+| The black window says *"could not start … every port it can use is taken"* | Close any other "LME Bloomberg Bridge" windows and try again. If that fails, restart the PC. If it still fails, send IT a screenshot of the black window. |
 | *"No LME_NTP rows found"* after pasting | Re-copy from EATrade and make sure you included the header row. Only `LME_NTP` rows are imported. |
 | A row shows `⚠ IN EMSX` | That order is already in EMSX. Check before resubmitting so you do not double it. Use **Select New** to tick only orders that are not already there. |
 | **Monitor** button is greyed out | Bloomberg order data is still loading. Wait a few seconds for the amber banner to clear, then try again. |

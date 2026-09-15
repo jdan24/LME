@@ -9,9 +9,6 @@ if not exist "%~dp0.env.uat" (
 )
 
 echo Starting Bloomberg bridge in UAT...
-start "LME Bloomberg Bridge - UAT" cmd /k "cd /d %~dp0 && python -m uvicorn backend.main:app --port 8000"
-
-timeout /t 3 /nobreak > nul
-
-echo Opening LME Order Entry...
-start "" "%~dp0index.html"
+:: backend.launch picks a free port (8000 or the next one free), or reuses an
+:: already-running UAT bridge, then opens LME Order Entry in the browser.
+start "LME Bloomberg Bridge - UAT" cmd /k "cd /d %~dp0 && python -m backend.launch"
