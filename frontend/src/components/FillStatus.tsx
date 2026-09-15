@@ -5,6 +5,7 @@ import { contractLabel } from '../utils/lmeConfig'
 import { TradeRecap } from './TradeRecap'
 import { OrderSummary } from './OrderSummary'
 import { StatusBadge } from './StatusBadge'
+import { DEAD_STATUSES, FILLED_STATUSES } from '../utils/orderStatus'
 
 interface Props {
   emsxSequences: number[]
@@ -12,11 +13,6 @@ interface Props {
   onAllFilled: () => void
   onRefreshOrders?: () => Promise<number>
 }
-
-// Explicit set avoids substring matches (e.g. /CANCEL/i would unintentionally
-// match a status string like "FULLFILL_CANCEL" if Bloomberg ever uses one).
-const DEAD_STATUSES = new Set(['CANCEL', 'CANCELED', 'CANCELLED', 'CXLPENDING', 'REJECTED'])
-const FILLED_STATUSES = new Set(['FILLED', 'FULLFILL'])
 
 const FILTER_LABELS: Record<FillStatusFilter, string> = {
   ACTIVE: 'Active',
@@ -210,17 +206,14 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
         </table>
       </div>
 
-      {/* Hidden on the Active tab — a partially-filled "active" order's fill would
-          otherwise show up here right under the active-orders table, which reads
-          as if it were one of the active orders rather than a separate fill record. */}
-      {filterMode !== 'ACTIVE' && (
-        <TradeRecap
-          submittedOrders={submittedOrders}
-          fills={fills}
-          traderNames={traderNames}
-          onTraderNamesChange={setTraderNames}
-        />
-      )}
+      {/* Shown on every tab and before any fills — the desk sends this recap
+          (priced at settlement) ahead of EMSX fills coming back. */}
+      <TradeRecap
+        submittedOrders={submittedOrders}
+        fills={fills}
+        traderNames={traderNames}
+        onTraderNamesChange={setTraderNames}
+      />
 
       {allFilled && (
         <div className="flex justify-end">

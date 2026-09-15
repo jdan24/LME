@@ -1,5 +1,7 @@
-import { useState } from 'react'
-import type { FillStatus } from '../types'
+import { useEffect, useRef, useState } from 'react'
+import { getSettlement } from '../api/client'
+import type { FillStatus, SettlementPrice } from '../types'
+import { DEAD_STATUSES } from '../utils/orderStatus'
 
 interface SubmittedOrder {
   emsxSequence: number
@@ -17,39 +19,42 @@ interface Props {
 
 interface RecapRow {
   emsxSequence: number
-  date: string
   side: 'BUY' | 'SELL'
   ticker: string
   qty: number
-  price: number
+  price: number | null
+  settleDate: string
+  // null until settlement for this ticker has been loaded
+  freshness: SettlementPrice['freshness'] | null
   trader: string
 }
 
-const COLUMNS = ['Date', 'Side', 'Bloomberg Ticker', 'Qty', 'Price', 'Trader'] as const
+const COLUMNS = ['Side', 'Bloomberg Ticker', 'Qty', 'Price', 'Settle Date', 'Trader'] as const
+
+// Screen-only cue on the Settle Date cell (copies stay plain text). Labels match SettlementPanel.
+const FRESHNESS: Record<SettlementPrice['freshness'], { label: string; cls: string }> = {
+  today: { label: "Today's settlement", cls: 'text-white' },
+  prior: { label: 'Prior day (LME not yet published)', cls: 'text-amber-300' },
+  stale: { label: 'Stale (>1 day old)', cls: 'text-red-400' },
+  unavailable: { label: 'Unavailable', cls: 'text-red-400' },
+}
 
 // No thousands separator — pastes cleanly into Bloomberg (per-row copy only).
-function formatPrice(price: number): string {
-  if (!price) return '—'
+function formatPrice(price: number | null): string {
+  if (price === null) return '—'
   return price.toFixed(2)
 }
 
 // With thousands separator for display and table copy.
-function formatPriceDisplay(price: number): string {
-  if (!price) return '—'
+function formatPriceDisplay(price: number | null): string {
+  if (price === null) return '—'
   return price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
-// YYYYMMDD → MM/DD/YYYY. Falls back to today when the create date is unknown
-// (e.g. EMSX didn't deliver the create-time field) — recaps are same-day.
-function formatDate(yyyymmdd: number): string {
-  const s = String(yyyymmdd)
-  if (yyyymmdd && s.length === 8) {
-    return `${s.slice(4, 6)}/${s.slice(6, 8)}/${s.slice(0, 4)}`
-  }
-  const d = new Date()
-  const mm = String(d.getMonth() + 1).padStart(2, '0')
-  const dd = String(d.getDate()).padStart(2, '0')
-  return `${mm}/${dd}/${d.getFullYear()}`
+// Bloomberg settle date (ISO YYYY-MM-DD from /api/settlement) → MM/DD/YYYY.
+function formatSettleDate(iso: string | null | undefined): string {
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return m ? `${m[2]}/${m[3]}/${m[1]}` : ''
 }
 
 // Typed trader names are free text — tabs/newlines would break the TSV layout.
@@ -61,33 +66,39 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
-// Builds the recap from each order that has at least one fill. Quantity reflects
-// the filled amount (not the ordered amount) and price is the EMSX average fill.
+// Fills are marked to settlement, so the recap is sent before EMSX reports fills:
+// every live (not cancelled/rejected) order at its ordered lots, priced at the
+// Bloomberg settlement for its ticker. Orders with no EMSX status yet count as live.
 function buildRows(
   submittedOrders: SubmittedOrder[],
   fills: FillStatus[],
+  settlements: SettlementPrice[],
   traderNames: Record<number, string>,
 ): RecapRow[] {
+  const byTicker = new Map(settlements.map((s) => [s.ticker, s]))
   return submittedOrders
+    .filter((o) => {
+      const status = fills.find((f) => f.emsxSequence === o.emsxSequence)?.status
+      return !status || !DEAD_STATUSES.has(status.toUpperCase())
+    })
     .map((o) => {
-      const fill = fills.find((f) => f.emsxSequence === o.emsxSequence)
-      const qty = fill?.filledAmount ?? 0
+      const s = byTicker.get(o.ticker)
       return {
         emsxSequence: o.emsxSequence,
-        date: formatDate(fill?.createDate ?? 0),
         side: o.bs,
         ticker: o.ticker,
-        qty,
-        price: fill?.avgPrice ?? 0,
+        qty: o.lots,
+        price: s?.price ?? null,
+        settleDate: formatSettleDate(s?.settleDate),
+        freshness: s?.freshness ?? null,
         trader: traderNames[o.emsxSequence] ?? '',
       }
     })
-    .filter((r) => r.qty > 0)
 }
 
 // Cells for one row, in COLUMNS order.
 function rowCells(r: RecapRow): string[] {
-  return [r.date, r.side, r.ticker, r.qty.toLocaleString(), formatPriceDisplay(r.price), cleanTrader(r.trader)]
+  return [r.side, r.ticker, r.qty.toLocaleString(), formatPriceDisplay(r.price), r.settleDate, cleanTrader(r.trader)]
 }
 
 // Tab-separated value text — pastes cleanly into Excel / Bloomberg / Outlook.
@@ -100,7 +111,7 @@ function toTSV(rows: RecapRow[]): string {
 // Real HTML <table> so a clipboard paste lands as a table in Bloomberg chat /
 // Outlook / Excel rather than a blob of tab-separated text.
 function toHtml(rows: RecapRow[]): string {
-  const numeric = new Set([3, 4])  // Qty, Price — right-aligned
+  const numeric = new Set([2, 3])  // Qty, Price — right-aligned
   const body = rows
     .map((r) =>
       `<tr>${rowCells(r)
@@ -119,7 +130,40 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
   const [copied, setCopied] = useState(false)
   const [copiedPriceIdx, setCopiedPriceIdx] = useState<number | null>(null)
   const [applyAllName, setApplyAllName] = useState('')
-  const rows = buildRows(submittedOrders, fills, traderNames)
+  const [settlements, setSettlements] = useState<SettlementPrice[]>([])
+  const [settleLoading, setSettleLoading] = useState(false)
+  const [settleError, setSettleError] = useState<string | null>(null)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
+  // Discards a slower settlement response that a newer request has superseded.
+  const settleRequestRef = useRef(0)
+
+  const rows = buildRows(submittedOrders, fills, settlements, traderNames)
+  // Stable key for the set of tickers, so settlement is re-fetched only when it
+  // changes (e.g. Refresh Fills picked up a teammate's order).
+  const tickerKey = [...new Set(rows.map((r) => r.ticker))].sort().join(',')
+
+  const loadSettlement = async () => {
+    if (!tickerKey) return
+    const request = ++settleRequestRef.current
+    setSettleLoading(true)
+    setSettleError(null)
+    try {
+      const { settlements: data } = await getSettlement(tickerKey.split(','))
+      if (settleRequestRef.current !== request) return
+      setSettlements(data)
+      setLastRefreshed(new Date())
+    } catch (e) {
+      if (settleRequestRef.current !== request) return
+      setSettleError(e instanceof Error ? e.message : 'Unknown error fetching settlement prices')
+    } finally {
+      if (settleRequestRef.current === request) setSettleLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    loadSettlement()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tickerKey])
 
   if (rows.length === 0) return null
 
@@ -134,7 +178,7 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
     onTraderNamesChange(next)
   }
 
-  // Copy a single fill price exactly as shown in the table (e.g. "7676.00").
+  // Copy a single settlement price exactly as shown in the table (e.g. "7676.00").
   const copyPrice = async (price: number, idx: number) => {
     const text = formatPrice(price)
     try {
@@ -175,7 +219,8 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
         <div>
           <h3 className="text-white text-base font-semibold">Trade Recap</h3>
           <p className="text-slate-500 text-xs mt-0.5">
-            {rows.length} filled trade{rows.length !== 1 ? 's' : ''}
+            {rows.length} trade{rows.length !== 1 ? 's' : ''} · priced at Bloomberg settlement
+            {lastRefreshed && ` · last refreshed ${lastRefreshed.toLocaleTimeString()}`}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
@@ -202,6 +247,16 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
             </button>
           </form>
           <button
+            onClick={loadSettlement}
+            disabled={settleLoading}
+            className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm disabled:opacity-50 flex items-center gap-1.5"
+          >
+            {settleLoading ? (
+              <span className="inline-block w-3.5 h-3.5 border-2 border-slate-400 border-t-white rounded-full animate-spin" />
+            ) : '↻'}
+            Refresh Settlement
+          </button>
+          <button
             onClick={copyTable}
             className="px-3 py-1.5 rounded-lg bg-slate-700 text-slate-200 hover:bg-slate-600 transition-colors text-sm flex items-center gap-1.5"
           >
@@ -210,31 +265,36 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
         </div>
       </div>
 
+      {settleError && (
+        <div className="bg-red-900/40 border border-red-700 rounded-lg px-3 py-2 text-red-300 text-xs">
+          Couldn't load settlement prices: {settleError}
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-lg border border-slate-700">
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-800 text-slate-400 text-left">
-              <th className="px-4 py-2 font-medium">Date</th>
               <th className="px-4 py-2 font-medium">Side</th>
               <th className="px-4 py-2 font-medium">Bloomberg Ticker</th>
               <th className="px-4 py-2 font-medium text-right">Qty</th>
               <th className="px-4 py-2 font-medium text-right">Price</th>
+              <th className="px-4 py-2 font-medium">Settle Date</th>
               <th className="px-4 py-2 font-medium">Trader</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r, i) => (
               <tr key={r.emsxSequence} className="border-t border-slate-700">
-                <td className="px-4 py-2 font-mono text-white">{r.date}</td>
                 <td className="px-4 py-2 font-medium text-white">{r.side}</td>
                 <td className="px-4 py-2 font-mono text-white">{r.ticker}</td>
                 <td className="px-4 py-2 text-right font-mono text-white">{r.qty.toLocaleString()}</td>
                 <td className="px-4 py-2 text-right font-mono text-white">
                   <div className="flex items-center justify-end gap-1.5">
                     <span>{formatPriceDisplay(r.price)}</span>
-                    {r.price > 0 && (
+                    {r.price !== null && (
                       <button
-                        onClick={() => copyPrice(r.price, i)}
+                        onClick={() => copyPrice(r.price as number, i)}
                         title="Copy price"
                         aria-label="Copy price"
                         className="text-slate-400 hover:text-white text-xs px-1 rounded hover:bg-slate-700 transition-colors"
@@ -243,6 +303,12 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
                       </button>
                     )}
                   </div>
+                </td>
+                <td
+                  className={`px-4 py-2 font-mono ${r.freshness ? FRESHNESS[r.freshness].cls : 'text-slate-500'}`}
+                  title={r.freshness ? FRESHNESS[r.freshness].label : 'Loading settlement…'}
+                >
+                  {r.settleDate || '—'}
                 </td>
                 <td className="px-4 py-2">
                   <input

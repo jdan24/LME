@@ -61,6 +61,7 @@ After staging, the tool moves to the **Fill Status** screen and lists your order
 - Use the **Active / Filled / All** tabs to choose which orders are shown. This only changes the view — it never changes what has actually filled.
 - Click **Refresh Fills** to pull the latest fills from Bloomberg. It also picks up any new LME orders that appeared in EMSX since you started (for example, ones a teammate staged).
 - **Summarize Selected** gives you a quick recap of the orders.
+- The **Trade Recap** table below is ready as soon as orders are staged. You don't need to wait for fills. It lists each live order at its ordered quantity, priced at the Bloomberg **settlement price**, with the **Settle Date** Bloomberg returned. Enter trader names per row or with **Apply to All**, then **Copy Table**. If the Settle Date shows **amber**, today's LME settlement isn't published yet (it's the prior day's price). Click **Refresh Settlement** later. **Red** means the price is stale or unavailable.
 - When every order is completely filled, an **"All Filled — Get Settlement Prices"** button appears. Click it to load the LME settlement prices for those contracts.
 
 ---
