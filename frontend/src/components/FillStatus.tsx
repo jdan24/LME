@@ -85,7 +85,8 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-white text-lg font-semibold">Fill Status</h2>
+          <h2 className="text-white text-lg font-semibold">EMSX Trade Details</h2>
+          <p className="text-slate-500 text-xs mt-0.5">Live order data from Bloomberg EMSX</p>
           {lastRefreshed && (
             <p className="text-slate-500 text-xs mt-0.5">
               Last refreshed: {lastRefreshed.toLocaleTimeString()}
@@ -152,13 +153,14 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
               <th className="px-4 py-3 font-medium">Side</th>
               <th className="px-4 py-3 font-medium text-right">Ordered</th>
               <th className="px-4 py-3 font-medium text-right">Filled</th>
+              <th className="px-4 py-3 font-medium text-right">Avg Price</th>
               <th className="px-4 py-3 font-medium">Status</th>
             </tr>
           </thead>
           <tbody>
             {visibleOrders.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-slate-500 text-sm">
+                <td colSpan={8}className="px-4 py-6 text-center text-slate-500 text-sm">
                   No {FILTER_LABELS[filterMode].toLowerCase()} orders to show.
                 </td>
               </tr>
@@ -195,6 +197,11 @@ export function FillStatus({ emsxSequences, submittedOrders, onAllFilled, onRefr
                         />
                       </div>
                     )}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-white">
+                    {fill && fill.filledAmount > 0 && fill.avgPrice > 0
+                      ? fill.avgPrice.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      : '—'}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={status} />

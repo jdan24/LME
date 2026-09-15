@@ -27,6 +27,13 @@ interface RecapRow {
   // null until settlement for this ticker has been loaded
   freshness: SettlementPrice['freshness'] | null
   trader: string
+  check: EmsxCheck
+}
+
+interface EmsxCheck {
+  label: string
+  cls: string
+  title: string
 }
 
 const COLUMNS = ['Side', 'Bloomberg Ticker', 'Qty', 'Price', 'Settle Date', 'Trader'] as const
@@ -66,6 +73,24 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 }
 
+// Screen-only check that the settlement price used here matches EMSX's average
+// fill price (compared to the cent). Deliberately not part of COLUMNS/rowCells,
+// so Copy Table never includes it. Only fully filled orders are checked.
+function emsxCheck(fill: FillStatus | undefined, settle: number | null): EmsxCheck {
+  if (!fill || fill.filledAmount < fill.lots || !(fill.avgPrice > 0)) {
+    return { label: 'Awaiting fill', cls: 'text-slate-500', title: 'Checked once EMSX reports the order fully filled' }
+  }
+  const avg = formatPriceDisplay(fill.avgPrice)
+  if (settle === null) {
+    return { label: 'No settlement', cls: 'text-slate-500', title: `EMSX avg ${avg}; no settlement price to compare` }
+  }
+  const title = `EMSX avg ${avg} vs settlement ${formatPriceDisplay(settle)}`
+  const diffCents = Math.round(fill.avgPrice * 100) - Math.round(settle * 100)
+  if (diffCents === 0) return { label: '✓ Match', cls: 'text-green-400', title }
+  const diff = (Math.abs(diffCents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return { label: `✗ ${diffCents > 0 ? '+' : '−'}${diff}`, cls: 'text-red-400', title }
+}
+
 // Fills are marked to settlement, so the recap is sent before EMSX reports fills:
 // every live (not cancelled/rejected) order at its ordered lots, priced at the
 // Bloomberg settlement for its ticker. Orders with no EMSX status yet count as live.
@@ -83,6 +108,7 @@ function buildRows(
     })
     .map((o) => {
       const s = byTicker.get(o.ticker)
+      const fill = fills.find((f) => f.emsxSequence === o.emsxSequence)
       return {
         emsxSequence: o.emsxSequence,
         side: o.bs,
@@ -92,6 +118,7 @@ function buildRows(
         settleDate: formatSettleDate(s?.settleDate),
         freshness: s?.freshness ?? null,
         trader: traderNames[o.emsxSequence] ?? '',
+        check: emsxCheck(fill, s?.price ?? null),
       }
     })
 }
@@ -217,9 +244,9 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
     <div className="space-y-3 rounded-lg border border-slate-700 bg-slate-800/40 p-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-white text-base font-semibold">Trade Recap</h3>
+          <h3 className="text-white text-base font-semibold">Preliminary Settlement</h3>
           <p className="text-slate-500 text-xs mt-0.5">
-            {rows.length} trade{rows.length !== 1 ? 's' : ''} · priced at Bloomberg settlement
+            {rows.length} trade{rows.length !== 1 ? 's' : ''} · priced at Bloomberg settlement, send before fills
             {lastRefreshed && ` · last refreshed ${lastRefreshed.toLocaleTimeString()}`}
           </p>
         </div>
@@ -281,6 +308,12 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
               <th className="px-4 py-2 font-medium text-right">Price</th>
               <th className="px-4 py-2 font-medium">Settle Date</th>
               <th className="px-4 py-2 font-medium">Trader</th>
+              <th
+                className="px-4 py-2 font-medium border-l border-slate-700"
+                title="Screen only, not included in Copy Table"
+              >
+                EMSX Check
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -319,6 +352,12 @@ export function TradeRecap({ submittedOrders, fills, traderNames, onTraderNamesC
                     aria-label={`Trader for ${r.ticker} ${r.side}`}
                     className="px-2 py-1 w-36 rounded bg-slate-900 border border-slate-600 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-blue-500"
                   />
+                </td>
+                <td
+                  className={`px-4 py-2 font-mono text-xs whitespace-nowrap border-l border-slate-700 ${r.check.cls}`}
+                  title={r.check.title}
+                >
+                  {r.check.label}
                 </td>
               </tr>
             ))}

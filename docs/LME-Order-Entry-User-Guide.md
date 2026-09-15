@@ -56,12 +56,13 @@ Open Bloomberg → launch the tool → paste orders from EATrade → pick the ro
 
 ## 5. Tracking Fills
 
-After staging, the tool moves to the **Fill Status** screen and lists your orders with how much of each has filled.
+After staging, the tool moves to the **Fill Status** screen. The top table, **EMSX Trade Details**, is live data from EMSX: each order, how much has filled, and the **Avg Price** it has filled at so far (`—` until it has fills).
 
 - Use the **Active / Filled / All** tabs to choose which orders are shown. This only changes the view — it never changes what has actually filled.
 - Click **Refresh Fills** to pull the latest fills from Bloomberg. It also picks up any new LME orders that appeared in EMSX since you started (for example, ones a teammate staged).
 - **Summarize Selected** gives you a quick recap of the orders.
-- The **Trade Recap** table below is ready as soon as orders are staged. You don't need to wait for fills. It lists each live order at its ordered quantity, priced at the Bloomberg **settlement price**, with the **Settle Date** Bloomberg returned. Enter trader names per row or with **Apply to All**, then **Copy Table**. If the Settle Date shows **amber**, today's LME settlement isn't published yet (it's the prior day's price). Click **Refresh Settlement** later. **Red** means the price is stale or unavailable.
+- The **Preliminary Settlement** table below is ready as soon as orders are staged. You don't need to wait for fills. It lists each live order at its ordered quantity, priced at the Bloomberg **settlement price**, with the **Settle Date** Bloomberg returned. Enter trader names per row or with **Apply to All**, then **Copy Table**. If the Settle Date shows **amber**, today's LME settlement isn't published yet (it's the prior day's price). Click **Refresh Settlement** later. **Red** means the price is stale or unavailable.
+- The last column, **EMSX Check**, confirms the settlement price matches the price EMSX filled at, once an order is fully filled. **✓ Match** means they agree to the cent. **✗ +1.50** (for example) means EMSX filled 1.50 above the settlement price, so check before sending. **Awaiting fill** means the order isn't fully filled yet. Hover over the check to see both prices. This column is for your eyes only and is **not** included when you click **Copy Table**.
 - When every order is completely filled, an **"All Filled — Get Settlement Prices"** button appears. Click it to load the LME settlement prices for those contracts.
 
 ---
