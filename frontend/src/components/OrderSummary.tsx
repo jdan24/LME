@@ -16,7 +16,6 @@ interface Props {
 interface Group {
   bs: 'BUY' | 'SELL'
   ticker: string
-  orders: number
   quantity: number
 }
 
@@ -27,10 +26,9 @@ export function OrderSummary({ orders, onClose }: Props) {
       const key = `${o.bs}|${o.ticker}`
       const g = map.get(key)
       if (g) {
-        g.orders += 1
         g.quantity += o.lots
       } else {
-        map.set(key, { bs: o.bs, ticker: o.ticker, orders: 1, quantity: o.lots })
+        map.set(key, { bs: o.bs, ticker: o.ticker, quantity: o.lots })
       }
     }
     // Sort: BUY before SELL, then ticker alphabetically
@@ -46,9 +44,9 @@ export function OrderSummary({ orders, onClose }: Props) {
   const [copiedTable, setCopiedTable] = useState(false)
 
   const buildTsv = () => {
-    const header = ['Side', 'Symbol', 'Orders', 'Quantity'].join('\t')
-    const body = groups.map(g => [g.bs, g.ticker, g.orders, g.quantity].join('\t'))
-    const total = ['TOTAL', '', totalRows, totalQty].join('\t')
+    const header = ['Side', 'Symbol', 'Quantity'].join('\t')
+    const body = groups.map(g => [g.bs, g.ticker, g.quantity].join('\t'))
+    const total = ['TOTAL', '', totalQty].join('\t')
     return [header, ...body, total].join('\n')
   }
 
@@ -57,13 +55,13 @@ export function OrderSummary({ orders, onClose }: Props) {
   const buildHtml = () => {
     const td = (v: string | number, align = 'left') => `<td align="${align}">${v}</td>`
     const rows = groups
-      .map(g => `<tr>${td(g.bs)}${td(g.ticker)}${td(g.orders, 'right')}${td(g.quantity, 'right')}</tr>`)
+      .map(g => `<tr>${td(g.bs)}${td(g.ticker)}${td(g.quantity, 'right')}</tr>`)
       .join('')
     return (
       `<table border="1" cellspacing="0" cellpadding="4" style="border-collapse:collapse">` +
-      `<thead><tr><th>Side</th><th>Symbol</th><th>Orders</th><th>Quantity</th></tr></thead>` +
+      `<thead><tr><th>Side</th><th>Symbol</th><th>Quantity</th></tr></thead>` +
       `<tbody>${rows}` +
-      `<tr>${td('TOTAL')}<td></td>${td(totalRows, 'right')}${td(totalQty, 'right')}</tr>` +
+      `<tr>${td('TOTAL')}<td></td>${td(totalQty, 'right')}</tr>` +
       `</tbody></table>`
     )
   }
@@ -134,7 +132,6 @@ export function OrderSummary({ orders, onClose }: Props) {
                   <tr className="bg-slate-900 text-slate-400 text-left">
                     <th className="px-4 py-2 font-medium">Side</th>
                     <th className="px-4 py-2 font-medium">Symbol</th>
-                    <th className="px-4 py-2 font-medium text-right">Orders</th>
                     <th className="px-4 py-2 font-medium text-right">Quantity</th>
                   </tr>
                 </thead>
@@ -145,14 +142,12 @@ export function OrderSummary({ orders, onClose }: Props) {
                         {g.bs}
                       </td>
                       <td className="px-4 py-2 font-mono text-blue-300">{g.ticker}</td>
-                      <td className="px-4 py-2 text-right text-slate-300">{g.orders}</td>
                       <td className="px-4 py-2 text-right font-mono text-white">{g.quantity.toLocaleString()}</td>
                     </tr>
                   ))}
                   <tr className="border-t-2 border-slate-500 bg-slate-900/70 font-semibold">
                     <td className="px-4 py-2 text-slate-200">TOTAL</td>
                     <td className="px-4 py-2"></td>
-                    <td className="px-4 py-2 text-right text-slate-200">{totalRows}</td>
                     <td className="px-4 py-2 text-right font-mono text-white">{totalQty.toLocaleString()}</td>
                   </tr>
                 </tbody>
